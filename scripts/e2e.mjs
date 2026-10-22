@@ -251,6 +251,17 @@ try {
   first.exifInfo.description = photos.find(p => p.file === first.file).title
   first.isFavorite = false
 
+  // a portrait photo fits the stage instead of filling it (and the Ask launcher stays out of the way)
+  const tall = assets.find(a => a.type === 'IMAGE' && a.height > a.width)
+  await openTile(tall)
+  await page.locator('.viewer-stage img').evaluate(i => i.decode())
+  const fit = await page.evaluate(() => {
+    const s = document.querySelector('.viewer-stage').getBoundingClientRect(), i = document.querySelector('.viewer-stage img').getBoundingClientRect()
+    return { s: [s.top, s.bottom, s.left, s.right], i: [i.top, i.bottom, i.left, i.right], ask: getComputedStyle(document.querySelector('pocket-ask-launcher') || document.body).display }
+  })
+  assert.ok(fit.i[0] >= fit.s[0] - 1 && fit.i[1] <= fit.s[1] + 1 && fit.i[2] >= fit.s[2] - 1 && fit.i[3] <= fit.s[3] + 1, `portrait photo overflows the viewer: ${JSON.stringify(fit)}`)
+  await btn('Close viewer').click()
+
   // the viewer screenshot: a Norway photo with its details
   const hero = assets.find(a => a.albums.includes('Norway 2026') && a.type === 'IMAGE') || assets[0]
   await page.goto(base + '/')
@@ -265,8 +276,9 @@ try {
   await page.locator('.tile-check').nth(1).click()
   await page.locator('.tile-check').nth(2).click()
   await btn('Add to album').click()
+  const added = page.waitForRequest(r => /\/albums\/[\w-]+\/assets$/.test(new URL(r.url()).pathname) && r.method() === 'PUT')
   await btn('Lisbon').click()
-  await page.waitForTimeout(200)
+  await added
   assert.ok(calls.some(c => /\/albums\/[\w-]+\/assets$/.test(c.p) && c.method === 'PUT' && c.body.ids.length === 2))
 
   // select → share with a password
@@ -286,8 +298,11 @@ try {
   await page.keyboard.press('Escape')
   await page.keyboard.press('/')
   await page.getByLabel('Search photos').fill('beach')
+  // wait for the request itself: the previous grid's tiles are still on screen right after navigating
+  const searched = page.waitForRequest(r => r.url().includes('/immich/search/smart') && r.postDataJSON()?.query === 'beach')
   await page.keyboard.press('Enter')
   await page.waitForURL(/\/search\?q=beach/)
+  await searched
   await page.locator('.tile').first().waitFor()
   assert.ok(calls.some(c => c.p === '/immich/search/smart' && c.body.query === 'beach'))
 

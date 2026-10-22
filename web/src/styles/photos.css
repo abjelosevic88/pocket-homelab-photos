@@ -145,6 +145,8 @@ button.person-name { color: var(--muted); font-weight: 550; }
 .switch-line { display: flex; align-items: center; gap: 12px; font-size: 13.5px; padding: 2px 0; }
 
 /* ---------- viewer ---------- */
+body.viewer-open { overflow: hidden; }
+body.viewer-open pocket-ask-launcher { display: none; }
 .viewer { position: fixed; inset: 0; z-index: 280; background: #0b0b0d; color: #f1f1f4; display: flex; flex-direction: column; animation: fade-in .16s ease; outline: none; }
 .viewer-bar { display: flex; align-items: center; gap: 2px; height: 56px; padding: 0 10px; padding-top: env(safe-area-inset-top); flex-shrink: 0; background: linear-gradient(180deg, rgba(0, 0, 0, .55), transparent); position: relative; z-index: 3; }
 .viewer-title { display: grid; min-width: 0; margin-left: 8px; }
@@ -163,10 +165,10 @@ button.person-name { color: var(--muted); font-weight: 550; }
 .vpill:disabled { opacity: .45; }
 .viewer-error { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 24px); padding: 6px 6px 6px 12px; border-radius: 10px; background: #b42318; font-size: 13px; }
 .viewer-body { flex: 1; min-height: 0; display: flex; margin-top: -56px; }
-.viewer-stage { position: relative; flex: 1; min-width: 0; display: grid; place-items: center; overflow: hidden; padding: 56px 12px 12px; }
+.viewer-stage { position: relative; flex: 1; min-width: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; overflow: hidden; padding: 56px 12px 12px; }
 .viewer-stage img, .viewer-stage video { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; transition: transform .2s var(--ease); }
 .viewer-stage img.editing { transition: transform .2s var(--ease), clip-path .15s; }
-.viewer-stage.zoom { overflow: auto; place-items: start; cursor: zoom-out; }
+.viewer-stage.zoom { overflow: auto; grid-template: auto / auto; place-items: start; cursor: zoom-out; }
 .viewer-stage.zoom img { max-width: none; max-height: none; }
 .viewer-nav { position: absolute; top: 50%; z-index: 2; width: 46px; height: 46px; margin-top: -23px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; color: #fff; background: rgba(0, 0, 0, .35); backdrop-filter: blur(6px); opacity: .0; transition: opacity .15s; }
 .viewer-stage:hover .viewer-nav, .viewer-nav:focus-visible { opacity: 1; }

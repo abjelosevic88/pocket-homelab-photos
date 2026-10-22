@@ -38,6 +38,8 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
   const touch = useRef(0)
 
   useEffect(() => { const prev = document.activeElement as HTMLElement | null; ref.current?.focus(); return () => prev?.focus?.() }, [])
+  // The page behind stays still and the Ask launcher stays out of the viewer's controls.
+  useEffect(() => { document.body.classList.add('viewer-open'); return () => document.body.classList.remove('viewer-open') }, [])
   useEffect(() => { localStorage.setItem('pp-info', info ? '1' : '0') }, [info])
   useEffect(() => {
     let live = true
