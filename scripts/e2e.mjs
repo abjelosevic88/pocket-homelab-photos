@@ -428,6 +428,7 @@ try {
     assert.equal(await page.locator('.viewer-title b').innerText(), title, 'Ask captures navigation keys')
     await page.keyboard.press('Escape')
     assert.equal(await page.locator('.viewer').count(), 1, 'Escape closes Ask without closing the photo')
+    await page.waitForFunction(() => !document.querySelector('pocket-ask-launcher')?.hasAttribute('open'))
     assert.equal(await page.locator('pocket-ask-launcher').getAttribute('open'), null)
   }
 
