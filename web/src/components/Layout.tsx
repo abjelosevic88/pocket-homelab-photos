@@ -185,7 +185,7 @@ function TopBar({ title, onMenu, onPalette, mobile, compact, sidebarOpen }: { ti
       <h1 className="range-title">{title ?? <span className="ellipsis">{SECTION_TITLE[section] || 'Photos'}</span>}</h1>
       <span className="spacer" />
       <button type="button" className="btn ghost icon-only" onClick={onPalette} aria-label="Search" title="Search (⌘K or /)"><Icon name="search" size={18} /></button>
-      {mobile && <AskButton />}
+      <AskButton />
       <MenuButton label="Account" className="avatar-btn" align="right" width={220} items={avatarMenu}>
         <Avatar name={user?.name} email={user?.email} size={30} />
       </MenuButton>
