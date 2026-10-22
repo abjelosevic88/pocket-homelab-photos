@@ -49,6 +49,9 @@ func (d *WebDAV) do(ctx context.Context, method, target string, body io.Reader, 
 
 func (d *WebDAV) fileURL(p string) string {
 	u, _ := url.Parse(d.Base)
+	if strings.Trim(p, "/") == "" { // the root itself
+		return u.String()
+	}
 	parts := strings.Split(strings.Trim(p, "/"), "/")
 	for i, s := range parts {
 		parts[i] = url.PathEscape(s)
@@ -111,7 +114,11 @@ func (d *WebDAV) Walk(ctx context.Context, root, _ string, fn func(Entry) error)
 			continue
 		}
 		seen[dir] = true
-		res, err := d.do(ctx, "PROPFIND", d.fileURL(dir)+"/", strings.NewReader(propfind), http.Header{"Depth": {"1"}, "Content-Type": {"application/xml"}})
+		target := d.fileURL(dir)
+		if !strings.HasSuffix(target, "/") {
+			target += "/"
+		}
+		res, err := d.do(ctx, "PROPFIND", target, strings.NewReader(propfind), http.Header{"Depth": {"1"}, "Content-Type": {"application/xml"}})
 		if err != nil {
 			return "", false, err
 		}

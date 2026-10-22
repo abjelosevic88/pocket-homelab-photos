@@ -117,7 +117,7 @@ const CLOUD_PROVIDERS = [
   { kind: 'webdav', name: 'WebDAV', auth: 'form', configured: true, fields: [{ key: 'url', label: 'Address', placeholder: 'https://dav.example.com/photos' }, { key: 'username', label: 'User name' }, { key: 'password', label: 'Password', secret: true }] },
   { kind: 's3', name: 'S3 bucket', auth: 'form', configured: true, fields: [{ key: 'endpoint', label: 'Endpoint', placeholder: 'https://s3.eu-central-003.backblazeb2.com' }, { key: 'region', label: 'Region', optional: true }, { key: 'bucket', label: 'Bucket' }, { key: 'access_key', label: 'Access key' }, { key: 'secret_key', label: 'Secret key', secret: true }] },
   { kind: 'gdrive', name: 'Google Drive', auth: 'oauth', configured: true, fields: [] },
-  { kind: 'onedrive', name: 'OneDrive', auth: 'oauth', configured: false, fields: [], help: 'Not set up on this box yet: an admin sets MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET.' },
+  { kind: 'onedrive', name: 'OneDrive', auth: 'oauth', configured: false, fields: [], help: 'Not set up on this box yet: an admin sets MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET.', setup: { console: 'https://entra.microsoft.com/', console_name: 'Microsoft Entra admin center', redirect_uri: 'https://photos.example.com/api/v1/clouds/oauth/onedrive/callback', env: ['MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET'], steps: ['New registration.', 'Add the redirect URI.', 'Create a client secret.', 'Set the ID and secret.'] } },
   { kind: 'dropbox', name: 'Dropbox', auth: 'oauth', configured: false, fields: [], help: 'Not set up on this box yet: an admin sets DROPBOX_APP_KEY and DROPBOX_APP_SECRET.' },
 ]
 
@@ -668,7 +668,13 @@ try {
   await page.getByRole('button', { name: 'Add a cloud', exact: true }).click()
   await page.locator('.provider').first().waitFor()
   assert.equal(await page.locator('.provider').count(), CLOUD_PROVIDERS.length)
-  assert.equal(await page.locator('.provider:disabled').count(), CLOUD_PROVIDERS.filter(x => !x.configured).length, 'unconfigured providers are shown, not offered')
+  assert.equal(await page.locator('.provider.needs-setup').count(), CLOUD_PROVIDERS.filter(x => !x.configured).length, 'unconfigured providers say they need setup')
+  // a cloud that needs setup opens its steps with a copyable redirect URI, and nothing to connect
+  await page.locator('.provider.needs-setup').first().click()
+  await page.locator('.copy-box code').filter({ hasText: '/api/v1/clouds/oauth/onedrive/callback' }).waitFor()
+  assert.ok((await page.locator('.setup-steps li').count()) >= 3)
+  assert.equal(await page.getByRole('button', { name: 'Connect', exact: true }).count(), 0)
+  await page.getByRole('button', { name: 'Other clouds' }).click()
   await page.locator('.provider').filter({ hasText: 'WebDAV' }).click()
   await page.getByLabel('Name', { exact: true }).fill('Family NAS')
   await page.getByLabel('Address', { exact: true }).fill('https://nas.example.com/dav/photos')

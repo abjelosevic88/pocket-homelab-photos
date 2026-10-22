@@ -43,6 +43,8 @@ type Server struct {
 	thumbSlots      chan struct{}
 	cloudClient     *http.Client
 	cloudClientOnce sync.Once
+	adoptMu         sync.Mutex
+	adoptTried      map[int64]time.Time
 }
 
 func New(cfg *config.Config, st *store.Store, log *slog.Logger, web fs.FS) *Server {

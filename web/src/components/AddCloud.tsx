@@ -4,7 +4,7 @@ import { clouds } from '../lib/api'
 import { cloudKind } from '../lib/clouds'
 import type { CloudAccount, CloudProvider } from '../lib/types'
 import { Icon } from './icons'
-import { Field, Loading, Modal, errMsg } from './ui'
+import { Field, Loading, Modal, errMsg, useToast } from './ui'
 
 export function AddCloud({ onClose, onAdded }: { onClose: () => void; onAdded: (a: CloudAccount) => void }) {
   const [providers, setProviders] = useState<CloudProvider[] | null>(null)
@@ -15,6 +15,7 @@ export function AddCloud({ onClose, onAdded }: { onClose: () => void; onAdded: (
   const [root, setRoot] = useState('')
   const [fields, setFields] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     const c = new AbortController()
@@ -23,6 +24,7 @@ export function AddCloud({ onClose, onAdded }: { onClose: () => void; onAdded: (
   }, [])
 
   const choose = (p: CloudProvider) => { setPick(p); setName(p.name); setRoot(''); setFields({}); setError(''); setVia(p.auth === 'core' ? 'core' : 'form') }
+  const setup = pick && !pick.configured ? pick.setup : null
   const usesForm = pick && (pick.auth === 'form' || (pick.auth === 'core' && via === 'form'))
   const missing = usesForm ? pick!.fields.filter(f => !f.optional && !fields[f.key]?.trim()).map(f => f.label) : []
 
@@ -41,12 +43,13 @@ export function AddCloud({ onClose, onAdded }: { onClose: () => void; onAdded: (
   }
 
   return (
-    <Modal size="lg" title={pick ? `Connect ${pick.name}` : 'Add a cloud'} onClose={onClose} className="add-cloud" footer={pick ? <>
+    <Modal size="lg" title={setup ? `Set up ${pick!.name}` : pick ? `Connect ${pick.name}` : 'Add a cloud'} onClose={onClose} className="add-cloud" footer={pick ? <>
       <button type="button" className="btn ghost" disabled={busy} onClick={() => setPick(null)}><Icon name="chevron-left" size={15} />Other clouds</button>
       <span className="spacer" />
+      {setup ? <a className="btn primary" href={setup.console} target="_blank" rel="noreferrer"><Icon name="external" size={15} />Open {setup.console_name}</a> :
       <button type="button" className="btn primary" disabled={busy || missing.length > 0} title={missing.length ? 'Still needed: ' + missing.join(', ') : undefined} onClick={connect}>
         {pick.auth === 'oauth' ? <><Icon name="external" size={15} />{busy ? 'Opening…' : `Continue to ${pick.name}`}</> : busy ? 'Connecting…' : 'Connect'}
-      </button>
+      </button>}
     </> : undefined}>
       {!pick && <>
         <p className="muted small add-cloud-lead">Photos indexes what is there — dates, cameras and places — and keeps a small thumbnail. Nothing is copied until you import it, and the cloud is only ever read.</p>
@@ -54,23 +57,35 @@ export function AddCloud({ onClose, onAdded }: { onClose: () => void; onAdded: (
         {providers && (
           <div className="provider-grid" role="list">
             {providers.map(p => (
-              <button key={p.kind} type="button" role="listitem" className="provider" disabled={!p.configured} onClick={() => choose(p)} aria-label={`${p.name}${p.configured ? '' : ' (not set up on this box)'}`}>
+              <button key={p.kind} type="button" role="listitem" className={`provider${p.configured ? '' : ' needs-setup'}`} onClick={() => choose(p)} aria-label={`${p.name}${p.configured ? '' : ' (needs a one-time setup on this box)'}`}>
                 <span className="source-ico"><Icon name={cloudKind(p.kind).icon} size={20} /></span>
                 <span className="grow">
-                  <b>{p.name}</b>
-                  <small>{!p.configured ? (p.help || 'Not set up on this box yet.') : p.auth === 'oauth' ? 'Sign in with your account.' : p.auth === 'core' ? 'Your Nextcloud from Pocket Core, or an app password.' : 'Address and password.'}</small>
+                  <b>{p.name}{!p.configured && <span className="badge">Setup needed</span>}</b>
+                  <small>{!p.configured ? 'A one-time app registration by whoever runs this box.' : subtitle(p)}</small>
                 </span>
-                {p.configured && <Icon name="chevron-right" size={16} className="faint" />}
+                <Icon name="chevron-right" size={16} className="faint" />
               </button>
             ))}
           </div>
         )}
       </>}
 
-      {pick && (
+      {setup && (
+        <div className="stack cloud-setup">
+          <p className="muted small">{pick!.name} lets an app in only once it is registered with {pick!.name} itself. Whoever runs this box does it once; after that everyone here signs in with their own account and allows read-only access.</p>
+          <ol className="setup-steps">{setup.steps.map((st, i) => <li key={i}>{st}</li>)}</ol>
+          <div className="field"><span className="label">Redirect URI</span>
+            <div className="copy-box"><code>{setup.redirect_uri}</code>
+              <button type="button" className="btn sm" onClick={() => navigator.clipboard?.writeText(setup.redirect_uri).then(() => toast('Copied'), () => toast('Copy it by hand', 'err'))}><Icon name="copy" size={14} />Copy</button></div>
+          </div>
+          <div className="field"><span className="label">Settings for Pocket Photos</span>
+            <div className="env-list">{setup.env.map(e => <code key={e}>{e}</code>)}</div>
+          </div>
+        </div>
+      )}
+      {pick && !setup && (
         <form className="stack" onSubmit={e => { e.preventDefault(); if (!missing.length) connect() }}>
-          {pick.help && pick.auth !== 'oauth' && <p className="muted small">{pick.help}</p>}
-          {pick.auth === 'oauth' && <p className="muted small">You sign in on {pick.name}’s own page and allow read-only access. Photos keeps only the permission it is given there, sealed on this server; you can remove it any time. {pick.help}</p>}
+          {pick.auth === 'oauth' && <p className="muted small">You sign in on {pick.name}’s own page and allow read-only access. Photos keeps only the permission it is given there, sealed on this server; you can remove it any time.</p>}
           {pick.auth === 'core' && via === 'core' && (
             <div className="via-core">
               <span className="source-ico"><Icon name="shield" size={18} /></span>
@@ -101,4 +116,13 @@ export function AddCloud({ onClose, onAdded }: { onClose: () => void; onAdded: (
       {!pick && error && <div className="callout danger"><Icon name="alert" size={15} /><span>{error}</span></div>}
     </Modal>
   )
+}
+
+function subtitle(p: CloudProvider) {
+  switch (p.kind) {
+    case 'nextcloud': return p.auth === 'core' ? 'Through Pocket Core, or with an app password.' : 'Address, user name and app password.'
+    case 'webdav': return 'Address, user name and password.'
+    case 's3': return 'Endpoint, bucket and an access key.'
+    default: return 'Sign in with your account.'
+  }
 }

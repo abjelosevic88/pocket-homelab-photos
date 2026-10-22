@@ -142,6 +142,7 @@ export interface CloudProvider {
   configured: boolean
   fields: CloudField[]
   help?: string
+  setup?: { console: string; console_name: string; steps: string[]; redirect_uri: string; env: string[] } | null
 }
 
 export interface CloudCounts { items: number; photos: number; videos: number; located: number; imported: number }

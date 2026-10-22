@@ -9,10 +9,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 
 	"github.com/abjelosevic88/pocket-homelab-photos/internal/cloud"
 	"github.com/abjelosevic88/pocket-homelab-photos/internal/cloud/cloudtest"
@@ -366,5 +369,62 @@ func TestDropboxSignInIndexesAndRefreshesTheToken(t *testing.T) {
 	plain, _ := s.open(sealed)
 	if !strings.Contains(plain, `"fresh"`) || !strings.Contains(plain, "refresh-1") || strings.Contains(sealed, "refresh-1") {
 		t.Fatal("refreshed token not stored sealed")
+	}
+}
+
+// With Pocket Core linking a person's Nextcloud, the account shows up in Photos by itself (like
+// Pocket Files and Documents do), scans, and stays gone once the person removes it.
+func TestCoreLinkedNextcloudAppearsByItself(t *testing.T) {
+	photo := cloudtest.JPEG(800, 600, 1)
+	var gets atomic.Int64
+	nc := fakeNextcloud(t, photo, &gets)
+	defer nc.Close()
+	var asked atomic.Int64
+	coreSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/services/credential" {
+			w.WriteHeader(404)
+			return
+		}
+		asked.Add(1)
+		var b map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		if b["type"] != "nextcloud" || b["user"] != "ana@example.com" {
+			w.WriteHeader(403)
+			writeJSON(w, 403, map[string]string{"error": "no Nextcloud for this person", "reason": "no_account"})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"type": "nextcloud", "url": nc.URL, "fields": map[string]string{"USERNAME": "ana", "APP_PASSWORD": "app-password"}})
+	}))
+	defer coreSrv.Close()
+	s := testServer(t, "")
+	s.core = core.New(coreSrv.URL, core.Options{TokenFile: filepath.Join(t.TempDir(), "core.token")})
+	ana := account(t, s, "ana@example.com")
+	bob := account(t, s, "bob@example.com")
+
+	list := waitIdle(t, s, ana)
+	if len(list) != 1 || list[0]["kind"] != "nextcloud" || list[0]["via"] != "core" || list[0]["login"] != "ana" || list[0]["root"] != "" {
+		t.Fatalf("%v", list)
+	}
+	if c := list[0]["counts"].(map[string]any); c["items"].(float64) != 2 {
+		t.Fatalf("whole Nextcloud indexed: %v", c)
+	}
+	// Bob has no Nextcloud in Core: nothing appears for him.
+	if w := request(s, "GET", "/api/v1/clouds", nil, bob); strings.TrimSpace(w.Body.String()) != "[]" {
+		t.Fatal(w.Body.String())
+	}
+	// Removed is remembered: listing again does not bring it back.
+	id := int64(list[0]["id"].(float64))
+	if w := request(s, "DELETE", fmt.Sprintf("/api/v1/clouds/%d", id), nil, ana); w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+	s.adoptMu.Lock()
+	s.adoptTried = nil // as if ten minutes passed
+	s.adoptMu.Unlock()
+	if w := request(s, "GET", "/api/v1/clouds", nil, ana); strings.TrimSpace(w.Body.String()) != "[]" {
+		t.Fatal("removed Nextcloud came back", w.Body.String())
+	}
+	// …until the person adds it again.
+	if w := request(s, "POST", "/api/v1/clouds", map[string]any{"kind": "nextcloud", "via": "core"}, ana); w.Code != 201 {
+		t.Fatal(w.Code, w.Body.String())
 	}
 }

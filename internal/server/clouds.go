@@ -134,6 +134,42 @@ func (s *Server) oauthHelp(r *http.Request, kind string) string {
 	return ""
 }
 
+type cloudSetup struct {
+	Console     string   `json:"console"` // where the box owner registers the app
+	ConsoleName string   `json:"console_name"`
+	Steps       []string `json:"steps"`
+	RedirectURI string   `json:"redirect_uri"`
+	Env         []string `json:"env"`
+}
+
+func (s *Server) oauthSetup(r *http.Request, kind string) *cloudSetup {
+	redirect := s.oauthRedirect(r, kind)
+	switch kind {
+	case "gdrive":
+		return &cloudSetup{Console: "https://console.cloud.google.com/apis/credentials", ConsoleName: "Google Cloud console", RedirectURI: redirect,
+			Env: []string{"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"}, Steps: []string{
+				"Create a project (or reuse one) and enable the Google Drive API under APIs & Services → Library.",
+				"Set up the OAuth consent screen as External and publish it — in Testing, Google drops the sign-in after 7 days.",
+				"Under Credentials, create an OAuth client ID of type Web application and add the redirect URI below.",
+				"Set the client ID and secret for Pocket Photos and restart it."}}
+	case "onedrive":
+		return &cloudSetup{Console: "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade", ConsoleName: "Microsoft Entra admin center", RedirectURI: redirect,
+			Env: []string{"MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET"}, Steps: []string{
+				"New registration: accounts in any organizational directory and personal Microsoft accounts.",
+				"Add a Web platform with the redirect URI below.",
+				"Under Certificates & secrets, create a client secret.",
+				"Set the application (client) ID and the secret for Pocket Photos and restart it."}}
+	case "dropbox":
+		return &cloudSetup{Console: "https://www.dropbox.com/developers/apps", ConsoleName: "Dropbox App Console", RedirectURI: redirect,
+			Env: []string{"DROPBOX_APP_KEY", "DROPBOX_APP_SECRET"}, Steps: []string{
+				"Create app: Scoped access, Full Dropbox.",
+				"Under Permissions, tick files.metadata.read and files.content.read, then Submit.",
+				"Under Settings, add the redirect URI below.",
+				"Set the app key and secret for Pocket Photos and restart it."}}
+	}
+	return nil
+}
+
 func (s *Server) handleCloudProviders(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for _, k := range cloudKinds {
@@ -143,6 +179,7 @@ func (s *Server) handleCloudProviders(w http.ResponseWriter, r *http.Request) {
 			p["auth"] = "oauth"
 			p["configured"] = s.oauthApp(k.Kind) != nil
 			p["help"] = s.oauthHelp(r, k.Kind)
+			p["setup"] = s.oauthSetup(r, k.Kind)
 		case k.Kind == "nextcloud" && s.core.Configured():
 			p["auth"] = "core"
 			p["help"] = "Uses the Nextcloud login Pocket Core keeps for you. Or connect directly with an app password."
@@ -182,6 +219,7 @@ func (s *Server) accountView(a *store.CloudAccount) cloudAccountView {
 }
 
 func (s *Server) handleListClouds(w http.ResponseWriter, r *http.Request) {
+	s.adoptCoreNextcloud(r.Context(), userFrom(r.Context()))
 	list, err := s.store.ListCloudAccounts(r.Context(), userFrom(r.Context()).ID)
 	if err != nil {
 		s.fail(w, err, "list clouds")
@@ -231,6 +269,58 @@ func (s *Server) splitFields(kind string, fields map[string]string, old *store.C
 		return "", "", err
 	}
 	return string(b), sealed, nil
+}
+
+// The person's Nextcloud from Pocket Core shows up by itself, the way Pocket Files and Documents do:
+// when Core lets Photos use it and the person has not connected it yet, Photos adds it (whole
+// Nextcloud, via Core) and starts the first scan. Removing it is remembered, so it does not come back
+// unless the person adds it again.
+const coreNextcloudKey = "clouds.core_nextcloud"
+
+func (s *Server) adoptCoreNextcloud(ctx context.Context, u *store.User) {
+	if u == nil || !s.core.Configured() || s.store.UserSetting(ctx, u.ID, coreNextcloudKey) != "" {
+		return
+	}
+	s.adoptMu.Lock()
+	defer s.adoptMu.Unlock()
+	if s.adoptTried == nil {
+		s.adoptTried = map[int64]time.Time{}
+	}
+	if t, ok := s.adoptTried[u.ID]; ok && time.Since(t) < 10*time.Minute { // the list is polled; ask Core rarely
+		return
+	}
+	s.adoptTried[u.ID] = time.Now()
+	list, err := s.store.ListCloudAccounts(ctx, u.ID)
+	if err != nil {
+		return
+	}
+	for _, a := range list {
+		if a.Kind == "nextcloud" && a.Via == "core" {
+			_ = s.store.SetUserSetting(ctx, u.ID, coreNextcloudKey, "added")
+			return
+		}
+	}
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	a := &store.CloudAccount{UserID: u.ID, Kind: "nextcloud", Name: "Nextcloud", Via: "core", Config: "{}"}
+	p, login, err := s.cloudProviderFor(cctx, a, u)
+	if err != nil {
+		s.log.Debug("no Nextcloud from Core for this person", "user", u.Email, "error", err)
+		return
+	}
+	if pr, ok := p.(prober); ok {
+		if err := pr.Probe(cctx, ""); err != nil {
+			s.log.Warn("Nextcloud from Core does not answer", "user", u.Email, "error", err)
+			return
+		}
+	}
+	a.Login = login
+	if err := s.store.CreateCloudAccount(ctx, a); err != nil {
+		return
+	}
+	_ = s.store.SetUserSetting(ctx, u.ID, coreNextcloudKey, "added")
+	s.log.Info("added the Nextcloud Pocket Core links for this person", "user", u.Email, "account", a.ID)
+	s.startScan(a.ID)
 }
 
 type prober interface {
@@ -311,6 +401,9 @@ func (s *Server) handleCreateCloud(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.CreateCloudAccount(r.Context(), a); err != nil {
 		s.fail(w, err, "create cloud")
 		return
+	}
+	if a.Kind == "nextcloud" && a.Via == "core" {
+		_ = s.store.SetUserSetting(r.Context(), u.ID, coreNextcloudKey, "added")
 	}
 	s.startScan(a.ID)
 	writeJSON(w, 201, s.accountView(a))
@@ -399,6 +492,9 @@ func (s *Server) handleDeleteCloud(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = os.RemoveAll(s.thumbDir(a.ID))
+	if a.Kind == "nextcloud" && a.Via == "core" {
+		_ = s.store.SetUserSetting(r.Context(), a.UserID, coreNextcloudKey, "removed")
+	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
