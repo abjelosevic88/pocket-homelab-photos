@@ -60,6 +60,7 @@ export interface Asset {
   id: string
   type: 'IMAGE' | 'VIDEO' | string
   originalFileName: string
+  originalMimeType?: string
   fileCreatedAt: string
   localDateTime?: string
   isFavorite: boolean

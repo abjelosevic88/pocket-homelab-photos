@@ -3,7 +3,7 @@ import { IMMICH } from './api'
 import type { Asset } from './types'
 
 /** Thumbnail ("thumbnail" ≈ 250px, "preview" ≈ 1440px) of an asset, edits applied. */
-export function thumb(a: Asset | string, size: 'thumbnail' | 'preview' = 'thumbnail', edited = true) {
+export function thumb(a: Asset | string, size: 'thumbnail' | 'preview' | 'fullsize' = 'thumbnail', edited = true) {
   const id = typeof a === 'string' ? a : a.id
   const c = typeof a === 'string' ? '' : '&c=' + encodeURIComponent(a.thumbhash || '')
   return `${IMMICH}/assets/${id}/thumbnail?size=${size}&edited=${edited}${c}`

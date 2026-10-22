@@ -262,6 +262,60 @@ try {
   assert.ok(fit.i[0] >= fit.s[0] - 1 && fit.i[1] <= fit.s[1] + 1 && fit.i[2] >= fit.s[2] - 1 && fit.i[3] <= fit.s[3] + 1, `portrait photo overflows the viewer: ${JSON.stringify(fit)}`)
   await btn('Close viewer').click()
 
+  // zoom: double-click keeps the spot under the cursor, drag pans without opening gaps, ctrl+wheel and keys zoom,
+  // Escape first returns to fit, a second double-click fits again
+  const wide = assets.find(a => a.type === 'IMAGE' && a.width > a.height)
+  await openTile(wide)
+  if (await page.locator('.viewer-info').isVisible()) await btn('Show photo information').click()
+  const img = page.locator('.viewer-stage img')
+  await img.evaluate(i => i.decode())
+  const geom = () => page.evaluate(() => {
+    const st = document.querySelector('.viewer-stage').getBoundingClientRect(), im = document.querySelector('.viewer-stage img')
+    const r = im.getBoundingClientRect(), ar = im.naturalWidth / im.naturalHeight
+    const cw = Math.min(r.width, r.height * ar), ch = cw / ar
+    const c = { left: r.left + (r.width - cw) / 2, top: r.top + (r.height - ch) / 2, width: cw, height: ch }
+    return { st: { left: st.left, top: st.top, right: st.right, bottom: st.bottom }, r: { left: r.left, top: r.top, width: r.width, height: r.height }, c, t: im.style.transform }
+  })
+  const settleZoom = () => page.waitForTimeout(400)
+  let g0 = await geom()
+  const px = g0.c.left + g0.c.width * 0.25, py = g0.c.top + g0.c.height * 0.3
+  const frac = g => [(px - g.r.left) / g.r.width, (py - g.r.top) / g.r.height]
+  const f0 = frac(g0)
+  await page.mouse.dblclick(px, py)
+  await page.locator('.viewer-stage.zoomed').waitFor()
+  await settleZoom()
+  let g1 = await geom()
+  assert.ok(g1.r.width > g0.r.width * 1.4, 'double-click zooms in')
+  const f1 = frac(g1)
+  assert.ok(Math.abs(f1[0] - f0[0]) < 0.01 && Math.abs(f1[1] - f0[1]) < 0.01, `the clicked spot stays under the cursor: ${f0} → ${f1}`)
+  await page.locator('.zoom-pct').waitFor()
+  // pan far to the right: the photo's left edge stops at the stage's left edge
+  await page.mouse.move(px, py); await page.mouse.down(); await page.mouse.move(px + 3000, py + 3000, { steps: 8 }); await page.mouse.up()
+  let g2 = await geom()
+  const covers = (g, a, b, lo, hi) => g.c[b] > g.st[hi] - g.st[lo] + 1 ? g.c[a] <= g.st[lo] + 1 && g.c[a] + g.c[b] >= g.st[hi] - 1 : true
+  assert.ok(covers(g2, 'left', 'width', 'left', 'right') && covers(g2, 'top', 'height', 'top', 'bottom'), `no gap after panning: ${JSON.stringify(g2)}`)
+  assert.ok(Math.abs(g2.c.left - g2.st.left) < 2, 'panned to the left edge')
+  // Escape fits instead of closing
+  await page.keyboard.press('Escape')
+  await settleZoom()
+  assert.equal(await page.locator('.viewer-stage.zoomed').count(), 0)
+  assert.equal(await page.locator('.viewer').count(), 1, 'Escape while zoomed keeps the viewer open')
+  // keys and ctrl+wheel
+  await page.keyboard.press('+'); await page.locator('.viewer-stage.zoomed').waitFor(); await settleZoom()
+  const sKey = (await geom()).r.width
+  await page.mouse.move(g0.c.left + g0.c.width / 2, g0.c.top + g0.c.height / 2)
+  await page.keyboard.down('Control'); await page.mouse.wheel(0, -200); await page.keyboard.up('Control')
+  await page.waitForTimeout(100)
+  assert.ok((await geom()).r.width > sKey * 1.2, 'ctrl+wheel zooms in')
+  await page.keyboard.press('0'); await settleZoom()
+  assert.equal(await page.locator('.viewer-stage.zoomed').count(), 0)
+  // double-click in, double-click out
+  await page.mouse.dblclick(px, py); await page.locator('.viewer-stage.zoomed').waitFor(); await settleZoom()
+  await page.mouse.dblclick(px, py); await settleZoom()
+  assert.equal(await page.locator('.viewer-stage.zoomed').count(), 0, 'second double-click fits again')
+  g0 = await geom()
+  await btn('Close viewer').click()
+
   // the viewer screenshot: a Norway photo with its details
   const hero = assets.find(a => a.albums.includes('Norway 2026') && a.type === 'IMAGE') || assets[0]
   await page.goto(base + '/')
@@ -388,7 +442,7 @@ try {
   await shot(page, 'library-dark.png')
 
   assert.deepEqual(errors, [])
-  console.log(`PASS: ${photos.length}-photo library, viewer details/description/favorite/navigation, add to album, protected sharing link, palette search, albums/people/memories/places/sharing, Files + Documents imports, upload tray, theme from Settings, five widths with the phone drawer.`)
+  console.log(`PASS: ${photos.length}-photo library, viewer details/description/favorite/navigation, portrait fit, zoom to the pointer + pan + keys + ctrl-wheel, add to album, protected sharing link, palette search, albums/people/memories/places/sharing, Files + Documents imports, upload tray, theme from Settings, five widths with the phone drawer.`)
 } finally {
   await context.close()
   if (!process.env.CDP) await browser.close()

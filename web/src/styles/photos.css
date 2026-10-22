@@ -168,8 +168,12 @@ body.viewer-open pocket-ask-launcher { display: none; }
 .viewer-stage { position: relative; flex: 1; min-width: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; overflow: hidden; padding: 56px 12px 12px; }
 .viewer-stage img, .viewer-stage video { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; transition: transform .2s var(--ease); }
 .viewer-stage img.editing { transition: transform .2s var(--ease), clip-path .15s; }
-.viewer-stage.zoom { overflow: auto; grid-template: auto / auto; place-items: start; cursor: zoom-out; }
-.viewer-stage.zoom img { max-width: none; max-height: none; }
+.viewer-stage { touch-action: none; }
+/* zoom and pan (usePanZoom): the box fills the stage, object-fit keeps the photo's shape, transforms do the rest */
+.viewer-stage img.pz { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: contain; transform-origin: 0 0; transition: transform .28s var(--ease); cursor: zoom-in; will-change: transform; }
+.viewer-stage.zoomed img.pz { cursor: grab; }
+.viewer-stage.dragging img.pz { cursor: grabbing; }
+.vpill.zoom-pct { min-width: 58px; justify-content: center; font-variant-numeric: tabular-nums; }
 .viewer-nav { position: absolute; top: 50%; z-index: 2; width: 46px; height: 46px; margin-top: -23px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; color: #fff; background: rgba(0, 0, 0, .35); backdrop-filter: blur(6px); opacity: .0; transition: opacity .15s; }
 .viewer-stage:hover .viewer-nav, .viewer-nav:focus-visible { opacity: 1; }
 .viewer-nav.prev { left: 14px; } .viewer-nav.next { right: 14px; }

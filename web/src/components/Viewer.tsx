@@ -7,6 +7,7 @@ import type { Asset } from '../lib/types'
 import { Icon } from './icons'
 import { Select } from './Select'
 import { Confirm, errMsg, useToast } from './ui'
+import { usePanZoom } from './usePanZoom'
 
 const RATINGS = [{ value: 0, label: 'Unrated' }, ...[1, 2, 3, 4, 5].map(n => ({ value: n, label: '★'.repeat(n) }))]
 
@@ -23,7 +24,6 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
   const [detail, setDetail] = useState<Asset>(asset)
   const [info, setInfo] = useState(() => window.innerWidth >= 1100 && localStorage.getItem('pp-info') === '1')
   const [editing, setEditing] = useState(false)
-  const [zoom, setZoom] = useState(false)
   const [slide, setSlide] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -36,6 +36,12 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
   const [desc, setDesc] = useState('')
   const ref = useRef<HTMLDivElement>(null)
   const touch = useRef(0)
+  const [hi, setHi] = useState<string | null>(null)
+  const hiTried = useRef(false)
+  const current = useRef(asset.id); current.current = asset.id
+  const go = (d: number) => { if (!editing) setIndex(Math.max(0, Math.min(assets.length - 1, index + d))) }
+  const zoomable = !editing && !live && asset.type !== 'VIDEO'
+  const pz = usePanZoom({ width: detail.width || detail.exifInfo?.exifImageWidth || undefined, height: detail.height || detail.exifInfo?.exifImageHeight || undefined, enabled: zoomable, onSwipe: go })
 
   useEffect(() => { const prev = document.activeElement as HTMLElement | null; ref.current?.focus(); return () => prev?.focus?.() }, [])
   // The page behind stays still and the Ask launcher stays out of the viewer's controls.
@@ -43,10 +49,26 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
   useEffect(() => { localStorage.setItem('pp-info', info ? '1' : '0') }, [info])
   useEffect(() => {
     let live = true
-    setDetail(asset); setDesc(asset.exifInfo?.description || ''); setEditing(false); setConfirm(false); setZoom(false); setError(''); setLive(false)
+    setDetail(asset); setDesc(asset.exifInfo?.description || ''); setEditing(false); setConfirm(false); pz.reset(); setHi(null); hiTried.current = false; setError(''); setLive(false)
     immich.get<Asset>('/assets/' + asset.id).then(a => { if (live) { setDetail(a); setDesc(a.exifInfo?.description || '') } }).catch(e => { if (live) setError(errMsg(e)) })
     return () => { live = false }
   }, [asset.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Zoomed past what the preview holds: load the full-size image (Immich's web-safe full resolution, then the
+  // original if that is something a browser can show), and swap it in once it has loaded.
+  useEffect(() => {
+    if (!pz.zoomed || hiTried.current || editing || !pz.needsDetail()) return
+    hiTried.current = true
+    const id = asset.id, tries = [thumb(detail, 'fullsize') + '&v=' + imageVersion]
+    if (/^image\/(jpeg|png|webp|gif|avif)$/.test(detail.originalMimeType || '')) tries.push(original(id))
+    const next = (i: number) => {
+      if (i >= tries.length) return
+      const im = new Image()
+      im.onload = () => { if (current.current === id && im.naturalWidth) setHi(tries[i]) }
+      im.onerror = () => next(i + 1)
+      im.src = tries[i]
+    }
+    next(0)
+  }, [pz.zoomed, pz.style.transform]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!slide) return
     const t = setInterval(() => setIndex((index + 1) % assets.length), 5000)
@@ -62,14 +84,17 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
       return true
     } catch (e) { setError(errMsg(e)); return false } finally { setBusy(false) }
   }
-  const go = (d: number) => { if (!editing) setIndex(Math.max(0, Math.min(assets.length - 1, index + d))) }
   const startEdit = () => { if (asset.type === 'VIDEO' || detail.isTrashed) return; setEditing(e => !e); setAngle(0); setMirror(false); setCrop(0) }
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest('input,textarea,select,.select-pop') || document.querySelector('.modal-backdrop')) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'Escape') { e.preventDefault(); if (editing) setEditing(false); else onClose() }
+      if (e.key === 'Escape') { e.preventDefault(); if (editing) setEditing(false); else if (pz.zoomed) pz.reset(); else onClose() }
+      else if (zoomable && (e.key === '+' || e.key === '=')) pz.zoomBy(1.5)
+      else if (zoomable && e.key === '-') pz.zoomBy(1 / 1.5)
+      else if (zoomable && e.key === '0') pz.reset()
+      else if (zoomable && e.key === '1') pz.zoomActual()
       else if (e.key === 'ArrowRight') go(1)
       else if (e.key === 'ArrowLeft') go(-1)
       else if (e.key === 'i') setInfo(v => !v)
@@ -135,24 +160,25 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
       </header>
       {error && <div className="viewer-error" role="alert"><Icon name="alert" size={15} /><span className="grow">{error}</span><button type="button" className="vbtn sm" aria-label="Dismiss" onClick={() => setError('')}><Icon name="x" size={15} /></button></div>}
       <div className="viewer-body">
-        <div className={`viewer-stage ${zoom ? 'zoom' : ''}`}
-          onTouchStart={e => (touch.current = e.touches[0].clientX)}
-          onTouchEnd={e => { const d = e.changedTouches[0].clientX - touch.current; if (Math.abs(d) > 70 && !zoom) go(d < 0 ? 1 : -1) }}>
+        <div ref={pz.stage} className={`viewer-stage${pz.zoomed ? ' zoomed' : ''}${pz.dragging ? ' dragging' : ''}`} {...pz.handlers}
+          onTouchStart={zoomable ? undefined : e => (touch.current = e.touches[0].clientX)}
+          onTouchEnd={zoomable ? undefined : e => { const d = e.changedTouches[0].clientX - touch.current; if (Math.abs(d) > 70) go(d < 0 ? 1 : -1) }}>
           {!editing && index > 0 && <button type="button" className="viewer-nav prev" aria-label="Previous photo" onClick={() => go(-1)}><Icon name="chevron-left" size={26} /></button>}
           {asset.type === 'VIDEO' || live ? (
             <video key={asset.id + String(live)} src={playback(live && detail.livePhotoVideoId ? detail.livePhotoVideoId : asset.id)} poster={thumb(detail, 'preview')} controls autoPlay playsInline
               onError={() => setError('This video could not be played. Try downloading the original.')} />
           ) : (
-            <img key={asset.id + imageVersion} className={editing ? 'editing' : ''} src={thumb(detail, 'preview', !editing) + '&v=' + imageVersion}
-              alt={ex.description || detail.originalFileName || 'Photo'} onDoubleClick={() => setZoom(!zoom)} draggable={false}
-              style={{ transform: editing ? `scaleX(${mirror ? -1 : 1}) rotate(${angle}deg)` : undefined, clipPath: editing && crop ? `inset(${crop}%)` : undefined }}
+            <img key={asset.id + imageVersion} ref={pz.img} className={editing ? 'editing' : 'pz'} src={(!editing && hi) || thumb(detail, 'preview', !editing) + '&v=' + imageVersion}
+              alt={ex.description || detail.originalFileName || 'Photo'} draggable={false}
+              style={editing ? { transform: `scaleX(${mirror ? -1 : 1}) rotate(${angle}deg)`, clipPath: crop ? `inset(${crop}%)` : undefined } : pz.style}
               onError={() => setError('The preview is unavailable. The original may still be downloadable.')} />
           )}
           {!editing && index < assets.length - 1 && <button type="button" className="viewer-nav next" aria-label="Next photo" onClick={() => go(1)}><Icon name="chevron-right" size={26} /></button>}
           {!editing && (
             <div className="viewer-float">
               {detail.livePhotoVideoId && <button type="button" className="vpill" onClick={() => setLive(!live)}><Icon name="live" size={15} />{live ? 'Still photo' : 'Play Live Photo'}</button>}
-              {asset.type !== 'VIDEO' && <button type="button" className="vbtn" aria-label={zoom ? 'Fit photo' : 'Zoom photo'} title={zoom ? 'Fit' : 'Zoom'} onClick={() => setZoom(!zoom)}><Icon name={zoom ? 'zoom-out' : 'zoom-in'} size={18} /></button>}
+              {zoomable && pz.zoomed && <button type="button" className="vpill zoom-pct" title="Show actual pixels (1)" onClick={pz.zoomActual}>{pz.percent}%</button>}
+              {asset.type !== 'VIDEO' && <button type="button" className="vbtn" disabled={!zoomable} aria-label={pz.zoomed ? 'Fit photo' : 'Zoom photo'} title={pz.zoomed ? 'Fit (0)' : 'Zoom (double-click, + / −)'} onClick={pz.toggle}><Icon name={pz.zoomed ? 'zoom-out' : 'zoom-in'} size={18} /></button>}
               <button type="button" className="vbtn" aria-label="Full screen" title="Full screen" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else ref.current?.requestFullscreen().catch(() => {}) }}><Icon name="fullscreen" size={18} /></button>
             </div>
           )}
