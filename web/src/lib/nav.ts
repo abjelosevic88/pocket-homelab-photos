@@ -21,8 +21,8 @@ export const MORE_NAV: NavItem[] = [
 ]
 
 export const SOURCES = [
-  { id: 'files', label: 'Pocket Files', icon: 'folder', desc: 'Your home folder, shared folders and mounted storage.' },
-  { id: 'documents', label: 'Pocket Documents', icon: 'file', desc: 'Images and scanned photos in your document archive.' },
+  { id: 'files', label: 'Pocket Files', icon: 'folder', appIcon: '/app-icons/pocket-files.svg', desc: 'Your home folder, shared folders and mounted storage.' },
+  { id: 'documents', label: 'Pocket Documents', icon: 'file', appIcon: '/app-icons/pocket-documents.svg', desc: 'Images and scanned photos in your document archive.' },
 ] as const
 export type SourceId = (typeof SOURCES)[number]['id']
 

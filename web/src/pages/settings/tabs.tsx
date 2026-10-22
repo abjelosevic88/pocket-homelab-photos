@@ -177,7 +177,7 @@ export function SourcesTab() {
         <div className="set-list">
           {SOURCES.map(s => (
             <div key={s.id} className="set-list-row">
-              <span className="acct-ico"><Icon name={s.icon} size={18} /></span>
+              <img className="source-app-icon" src={s.appIcon} alt="" width={36} height={36} />
               <div className="grow"><div className="acct-name">{s.label}</div><div className="muted small">{s.desc} Read only.</div></div>
               <Link className="btn sm" to={`/sources/${s.id}`}>Browse</Link>
             </div>

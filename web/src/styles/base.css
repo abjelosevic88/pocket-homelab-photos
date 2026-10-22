@@ -37,6 +37,8 @@
   --success-soft: rgba(22, 163, 74, .1);
   --warning: #d97706;
   --warning-soft: rgba(217, 119, 6, .12);
+  --progress: #2563eb;
+  --progress-soft: rgba(37, 99, 235, .08);
   --offhours: rgba(20, 20, 30, .022);
   --busy-hatch: rgba(20, 20, 30, .07);
   --mix-bg: 15%;
@@ -92,6 +94,8 @@
   --success-soft: rgba(74, 222, 128, .12);
   --warning: #fbbf24;
   --warning-soft: rgba(251, 191, 36, .13);
+  --progress: #93c5fd;
+  --progress-soft: rgba(96, 165, 250, .12);
   --offhours: rgba(0, 0, 0, .22);
   --busy-hatch: rgba(255, 255, 255, .08);
   --mix-bg: 24%;
@@ -285,8 +289,8 @@ input.bare, textarea.bare { border-color: transparent; background: transparent; 
 .callout.danger > .icon { color: var(--danger); }
 .callout.warn { background: var(--warning-soft); }
 .callout.warn > .icon { color: var(--warning); }
-.callout.info { background: var(--accent-soft); }
-.callout.info > .icon { color: var(--accent); }
+.callout.info { background: var(--surface-2); }
+.callout.info > .icon { color: var(--muted); }
 .callout.success { background: var(--success-soft); }
 
 /* avatar */

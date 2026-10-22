@@ -1,5 +1,5 @@
 // Photos indexed in one of the person's clouds: review them where they are, see them on the map, import what you pick.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ApiError, type CloudFilter, cloudThumb, clouds, isAbort } from '../lib/api'
 import { useApp } from '../lib/app-context'
@@ -12,6 +12,7 @@ import { usePageTitle } from '../components/Layout'
 import { PhotoMap } from '../components/PhotoMap'
 import { Select } from '../components/Select'
 import { SourceSwitch } from '../components/SourceSwitch'
+import { ImportInfo } from '../components/ImportInfo'
 import { Empty, Loading, PageHeader, Segmented, Spinner, Tabs, errMsg, useToast } from '../components/ui'
 
 const PAGE = 120
@@ -43,6 +44,11 @@ export default function CloudSource() {
   const [loading, setLoading] = useState(false)
   const [missing, setMissing] = useState(false)
   const [error, setError] = useState('')
+  const [foundRequest, setFoundRequest] = useState(0)
+  const [foundShown, setFoundShown] = useState(false)
+  const [revealVersion, setRevealVersion] = useState(0)
+  const handledFound = useRef(0)
+  const resultsStart = useRef<HTMLDivElement>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [open, setOpen] = useState<number | null>(null)
   const [importing, setImporting] = useState(false)
@@ -55,7 +61,7 @@ export default function CloudSource() {
   const query = useRef(0)
   const sentinel = useRef<HTMLDivElement>(null)
 
-  const load = useCallback(async (from: string | null, signal?: AbortSignal) => {
+  const load = useCallback(async (from: string | null, signal?: AbortSignal, reveal = false) => {
     const n = ++query.current
     loadingRef.current = true; setLoading(true); setError('')
     try {
@@ -63,6 +69,7 @@ export default function CloudSource() {
       if (n !== query.current) return
       setItems(old => (from ? [...old, ...page.items.filter(i => !old.some(o => o.id === i.id))] : page.items))
       setTotal(page.total); setCursor(page.next_cursor || null); setMissing(false)
+      if (reveal) { setFoundShown(true); setRevealVersion(v => v + 1) }
     } catch (e) {
       if (isAbort(e) || n !== query.current) return
       if (e instanceof ApiError && e.status === 404) setMissing(true)
@@ -72,16 +79,32 @@ export default function CloudSource() {
 
   useEffect(() => {
     const c = new AbortController()
-    setItems([]); setCursor(null); setSelected(new Set()); setResults([])
-    load(null, c.signal)
+    const reveal = foundRequest !== handledFound.current
+    handledFound.current = foundRequest
+    // Keep the existing photos visible during a manual refresh.
+    if (!reveal) setItems([])
+    setCursor(null); setSelected(new Set()); setResults([]); setFoundShown(false)
+    load(null, c.signal, reveal)
     return () => c.abort()
-  }, [load])
+  }, [load, foundRequest])
+
+  useLayoutEffect(() => {
+    if (!revealVersion) return
+    resultsStart.current?.focus({ preventScroll: true })
+    resultsStart.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
+  }, [revealVersion])
+
+  function showFound() {
+    setTab('photos'); setFilter('all'); setType(''); setQ(''); setSearch('')
+    setLoading(true); setFoundShown(false)
+    setFoundRequest(v => v + 1)
+  }
 
   // A finished scan brings new photos: show them.
   const wasScanning = useRef(account?.status === 'scanning')
   useEffect(() => {
     const now = account?.status === 'scanning'
-    if (wasScanning.current && !now && !importing) load(null)
+    if (wasScanning.current && !now && !importing && !loadingRef.current) load(null)
     wasScanning.current = now
   }, [account?.status]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -155,12 +178,13 @@ export default function CloudSource() {
     <div className="page sources cloud-page">
       <PageHeader title={account.name} sub={`${kind.label}${account.login ? ' · ' + account.login : ''}${account.root ? ' · ' + account.root : ''} · ${cloudCounts(account)}`}
         actions={<>
-          <button type="button" className="btn sm" disabled={account.status === 'scanning' || importing} onClick={rescan}><Icon name="refresh" size={15} />{account.status === 'scanning' ? 'Scanning…' : 'Rescan'}</button>
+          <ImportInfo source={account.name} cloud />
+          <button type="button" className={`btn sm ${account.status === 'scanning' ? 'scan-button' : ''}`} disabled={account.status === 'scanning' || importing} onClick={rescan}>{account.status === 'scanning' ? <Spinner /> : <Icon name="refresh" size={15} />}{account.status === 'scanning' ? 'Scanning…' : 'Rescan'}</button>
           <Link className="btn ghost icon-only sm" to="/settings/sources" aria-label="Cloud settings" title="Cloud settings"><Icon name="settings" size={16} /></Link>
         </>} />
       <SourceSwitch active={'cloud-' + account.id} disabled={importing} />
-      <div className="callout info source-note"><Icon name="shield" size={15} /><span>Photos reads {account.name} with the sign-in you gave it, read only, and keeps just a small thumbnail. Importing copies the originals you pick into your Immich library — nothing in {account.name} is changed or moved.</span></div>
-      {account.status === 'scanning' && <div className="callout cloud-scan" role="status"><Spinner /><span className="grow">{cloudStatus(account)}. New photos appear as they are read.</span><button type="button" className="btn sm" onClick={() => load(null)}>Show what’s found</button></div>}
+      <div key={id} className="source-content">
+      {account.status === 'scanning' && <div className="callout cloud-scan" role="status"><Spinner /><span className="grow">{cloudStatus(account)}. Browse the photos read so far while the scan continues.</span><button type="button" className="btn sm" disabled={loading || importing} onClick={showFound}>{loading ? 'Loading…' : 'Show what’s found'}</button></div>}
       {account.status === 'error' && <div className="callout danger"><Icon name="alert" size={15} /><span className="grow">{cloudStatus(account)}</span><button type="button" className="btn sm" onClick={rescan}>Try again</button></div>}
       {account.status === 'reconnect' && <div className="callout warn"><Icon name="key" size={15} /><span className="grow">{kind.label} no longer accepts this sign-in{account.error ? ` (${account.error})` : ''}. Sign in again to keep the index up to date.</span><button type="button" className="btn sm primary" onClick={reconnect}>Reconnect</button></div>}
       {account.status === 'idle' && account.last_scan_at && <p className="muted small cloud-last">{cloudStatus(account)} · rescans by itself every few hours.</p>}
@@ -189,7 +213,9 @@ export default function CloudSource() {
         )}
         {!connection?.connected && <div className="callout warn"><Icon name="info" size={15} /><span>You can review everything now. Connect your Immich library in Settings to import.</span></div>}
         {error && <div className="callout danger"><Icon name="alert" size={15} /><span className="grow">{error}</span><button type="button" className="btn sm" onClick={() => load(null)}>Try again</button></div>}
-        {!!items.length && <p className="muted small tnum cloud-total">{total === items.length ? plural(total, 'item') : `${items.length.toLocaleString()} of ${plural(total, 'item')}`}</p>}
+        <div ref={resultsStart} className="cloud-results-start" tabIndex={-1} aria-label="Photos found so far" aria-busy={loading}>
+          <p className="muted small tnum cloud-total" role="status">{foundShown && <span className="cloud-updated">Updated · </span>}{total === items.length ? plural(total, 'item') : `${items.length.toLocaleString()} of ${plural(total, 'item')}`}{foundShown ? ' found so far' : ''}</p>
+        </div>
 
         <div className={`photo-groups ${picking ? 'picking' : ''}`}>
           {groups.map(([key, list]) => {
@@ -271,6 +297,7 @@ export default function CloudSource() {
         return <CloudViewer items={list} index={index} setIndex={n => setOpen(open >= 0 ? n : -1 - n)} onClose={() => setOpen(null)}
           onImported={it => { setItems(old => old.map(x => (x.id === it.id ? it : x))); setMapItems(old => old && old.map(x => (x.id === it.id ? it : x))) }} />
       })()}
+      </div>
     </div>
   )
 }

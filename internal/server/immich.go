@@ -42,7 +42,9 @@ func (s *Server) connection(ctx context.Context, u *store.User) (*connection, er
 		return nil, e
 	}
 	if s.core.Configured() {
-		cred, e := s.core.ServiceFor(ctx, u.Email, "immich")
+		// Authorization must reflect Core's current switch, including for media
+		// requests. Cached credentials (or stale-on-error fallback) bypass revocation.
+		cred, e := s.core.ServiceForFresh(ctx, u.Email, "immich")
 		if e != nil {
 			return nil, e
 		}
@@ -212,7 +214,7 @@ func (s *Server) handleImmich(w http.ResponseWriter, r *http.Request) {
 	}
 	c, e := s.connection(r.Context(), userFrom(r.Context()))
 	if e != nil {
-		writeErr(w, 409, e.Error())
+		writeJSON(w, 409, map[string]string{"error": e.Error(), "code": "connection_unavailable"})
 		return
 	}
 	q := r.URL.Query()

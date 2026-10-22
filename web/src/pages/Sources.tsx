@@ -10,6 +10,7 @@ import { Icon } from '../components/icons'
 import { usePageTitle } from '../components/Layout'
 import { Select } from '../components/Select'
 import { SourceSwitch } from '../components/SourceSwitch'
+import { ImportInfo } from '../components/ImportInfo'
 import { Empty, Loading, Modal, PageHeader, Spinner, errMsg, useToast } from '../components/ui'
 
 interface Entry { id?: number; name: string; path: string; is_dir?: boolean; size?: number; mime?: string; modified?: string; title?: string }
@@ -105,10 +106,10 @@ export default function Sources() {
   return (
     <div className="page sources">
       <PageHeader title={meta.label} sub={source === 'files' ? 'Photos and videos in your home, shared and mounted folders.' : 'Images and scanned photos in your document archive.'}
-        actions={<button type="button" className="btn ghost icon-only" aria-label="Refresh source" title="Refresh" disabled={importing} onClick={() => load()}><Icon name="refresh" size={16} /></button>} />
+        actions={<><ImportInfo source={meta.label} /><button type="button" className="btn ghost icon-only" aria-label="Refresh source" title="Refresh" disabled={importing} onClick={() => load()}><Icon name="refresh" size={16} /></button></>} />
       <SourceSwitch active={source} disabled={importing} />
-      <div className="callout info source-note"><Icon name="shield" size={15} /><span>Photos browses with your own access in Pocket Core. Importing copies the originals you pick into your Immich library — nothing in {meta.label} is changed or moved.</span></div>
 
+      <div key={source} className="source-content">
       <div className="source-tools">
         {source === 'files' && <>
           <Select value={space} options={spaces.map(s => ({ value: s.id, label: s.name }))} onChange={v => { setSpace(v); setPath('/') }} label="File location" size="sm" className="inline" disabled={importing} width={220} />
@@ -181,6 +182,7 @@ export default function Sources() {
           <div className="source-preview">{preview.mime?.startsWith('video/') ? <video src={raw_(preview)} controls autoPlay /> : <img src={raw_(preview)} alt={preview.name} />}</div>
         </Modal>
       )}
+      </div>
     </div>
   )
 }

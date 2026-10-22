@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { api, clouds as cloudApi, immich, V1 } from './api'
 import type { Grouping } from './photos'
 import type { Album, AuthStatus, CloudAccount, Connection, Stats, User } from './types'
@@ -55,6 +55,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [connection, setConnection] = useState<Connection | null>(null)
   const [connectionError, setConnectionError] = useState('')
+  const connectionCheck = useRef<AbortController | null>(null)
+  const connectionGeneration = useRef(0)
   const [stats, setStats] = useState<Stats | null>(null)
   const [albums, setAlbums] = useState<Album[]>([])
   const [version, setVersion] = useState(0)
@@ -78,10 +80,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { if (status?.title) document.title = status.title }, [status?.title])
 
   const checkConnection = useCallback(async () => {
-    setConnectionError('')
-    try { setConnection(await api.get<Connection>(`${V1}/connection`)) } catch (e) { setConnectionError((e as Error).message) }
+    connectionCheck.current?.abort()
+    const controller = new AbortController()
+    connectionCheck.current = controller
+    try {
+      const next = await api.get<Connection>(`${V1}/connection`, controller.signal)
+      if (controller.signal.aborted) return
+      if (!next.connected) connectionGeneration.current++
+      setConnectionError('')
+      // A background status check must not reload the library or flash its grid.
+      setConnection(current => JSON.stringify(current) === JSON.stringify(next) ? current : next)
+    } catch (e) {
+      if (controller.signal.aborted) return
+      connectionGeneration.current++
+      setConnection({ connected: false })
+      setConnectionError((e as Error).message)
+    }
   }, [])
-  const reloadAlbums = useCallback(async () => { setAlbums(await immich.get<Album[]>('/albums').catch(() => [] as Album[])) }, [])
+  const reloadAlbums = useCallback(async () => {
+    const generation = connectionGeneration.current
+    const next = await immich.get<Album[]>('/albums').catch(() => [] as Album[])
+    if (generation === connectionGeneration.current) setAlbums(next)
+  }, [])
 
   const refresh = useCallback(async () => {
     const st = await api.get<AuthStatus>(`${V1}/auth/status`)
@@ -92,15 +112,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { refresh().catch(() => setStatus({ needs_setup: false, auth_mode: 'local', authenticated: false, user: null, version: '', title: 'Pocket Photos' })) }, [refresh])
   useEffect(() => {
-    const h = () => { setUser(null); setStatus(s => s ? { ...s, authenticated: false, user: null } : s) }
+    const h = () => { connectionCheck.current?.abort(); connectionGeneration.current++; setConnection(null); setUser(null); setStatus(s => s ? { ...s, authenticated: false, user: null } : s) }
     window.addEventListener('pp:unauthorized', h)
     return () => window.removeEventListener('pp:unauthorized', h)
   }, [])
+  useEffect(() => {
+    if (!user) return
+    const refreshVisible = () => { if (document.visibilityState === 'visible') void checkConnection() }
+    const unavailable = (event: Event) => {
+      connectionCheck.current?.abort()
+      connectionGeneration.current++
+      setConnection(current => ({ connected: false, core: current?.core, server_configured: current?.server_configured, message: (event as CustomEvent<string>).detail }))
+      setStats(null)
+      setAlbums([])
+    }
+    window.addEventListener('focus', refreshVisible)
+    document.addEventListener('visibilitychange', refreshVisible)
+    window.addEventListener('pp:connection-unavailable', unavailable)
+    const timer = window.setInterval(refreshVisible, 15000)
+    return () => {
+      connectionCheck.current?.abort()
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshVisible)
+      document.removeEventListener('visibilitychange', refreshVisible)
+      window.removeEventListener('pp:connection-unavailable', unavailable)
+    }
+  }, [user, checkConnection])
   // the counts in the sidebar and the album list follow every change
   useEffect(() => {
     if (!connection?.connected) { setStats(null); setAlbums([]); return }
-    immich.get<Stats>('/assets/statistics').then(setStats).catch(() => {})
+    let cancelled = false
+    const generation = connectionGeneration.current
+    immich.get<Stats>('/assets/statistics').then(next => {
+      if (!cancelled && generation === connectionGeneration.current) setStats(next)
+    }).catch(() => {})
     reloadAlbums()
+    return () => { cancelled = true }
   }, [connection, version, reloadAlbums])
 
   const bump = useCallback(() => setVersion(v => v + 1), [])

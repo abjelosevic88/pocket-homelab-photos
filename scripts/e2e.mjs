@@ -650,6 +650,53 @@ try {
   // rescan: the status follows the polling until the scan is done
   await btn('Rescan').click()
   await page.locator('.cloud-scan').waitFor()
+  cloudPolls = -100 // keep the scan running while exercising its review action
+  // Show what's found must escape an empty search and the map, then reveal the grid.
+  const cloudSearch = page.getByRole('textbox', { name: 'Search this cloud' })
+  await cloudSearch.fill('no-photo-has-this-name')
+  await cloudSearch.press('Enter')
+  await page.waitForFunction(() => document.querySelector('.cloud-results-start')?.getAttribute('aria-busy') === 'false')
+  await page.getByRole('tab', { name: 'Map', exact: true }).click()
+  await page.getByRole('button', { name: 'Show what’s found', exact: true }).click()
+  await page.locator('.cloud-updated').waitFor()
+  assert.equal(await page.getByRole('tab', { name: 'Photos', exact: true }).getAttribute('aria-selected'), 'true')
+  assert.equal(await cloudSearch.inputValue(), '')
+  assert.ok(await page.locator('.cloud-tile').count() > 0)
+  assert.equal(await page.locator('.cloud-results-start').evaluate(el => document.activeElement === el), true)
+  await page.waitForFunction(() => {
+    const results = document.querySelector('.cloud-results-start').getBoundingClientRect()
+    const scroller = document.querySelector('.content')
+    const content = scroller.getBoundingClientRect()
+    return results.top >= content.top && results.bottom < content.bottom && scroller.scrollTop > 0
+  })
+  // Clicking again with unchanged data still reports an update, without blanking the grid.
+  const unchangedTile = await page.locator('.cloud-tile').first().elementHandle()
+  let releaseFound
+  const foundGate = new Promise(resolve => { releaseFound = resolve })
+  const holdFound = async route => { await foundGate; await route.fallback() }
+  await page.route('**/api/v1/clouds/items?*', holdFound)
+  await page.getByRole('button', { name: 'Show what’s found', exact: true }).click()
+  await page.locator('.cloud-scan').getByRole('button', { name: 'Loading…', exact: true }).waitFor()
+  assert.equal(await unchangedTile.evaluate(el => el.isConnected), true)
+  releaseFound()
+  await page.locator('.cloud-updated').waitFor()
+  await page.unroute('**/api/v1/clouds/items?*', holdFound)
+  // An empty scan still answers the click; failed refreshes remain retryable.
+  const noFound = route => route.fulfill({ json: { items: [], total: 0, next_cursor: null } })
+  await page.route('**/api/v1/clouds/items?*', noFound)
+  await page.getByRole('button', { name: 'Show what’s found', exact: true }).click()
+  await page.getByText('Updated · 0 items found so far', { exact: true }).waitFor()
+  await page.unroute('**/api/v1/clouds/items?*', noFound)
+  const failedFound = route => route.fulfill({ status: 503, json: { error: 'Cloud is temporarily unavailable' } })
+  await page.route('**/api/v1/clouds/items?*', failedFound)
+  await page.getByRole('button', { name: 'Show what’s found', exact: true }).click()
+  await page.getByText('Cloud is temporarily unavailable', { exact: true }).waitFor()
+  assert.equal(await page.locator('.cloud-updated').count(), 0, 'failed refresh does not claim success')
+  await page.unroute('**/api/v1/clouds/items?*', failedFound)
+  await page.getByRole('button', { name: 'Show what’s found', exact: true }).click()
+  await page.locator('.cloud-updated').waitFor()
+  assert.ok(await page.locator('.cloud-tile').count() > 0)
+  cloudPolls = 2
   await page.locator('.cloud-scan').waitFor({ state: 'detached', timeout: 20000 })
   // phones: the review page fits
   await page.setViewportSize({ width: 390, height: 844 })
@@ -756,6 +803,47 @@ try {
   await page.goto(base + '/')
   await page.locator('.tile').first().waitFor()
   await shot(page, 'library-dark.png')
+
+  // Core revocation updates an already-open tab, without reloading an unchanged grid.
+  let revoked = false
+  await page.route('**/api/v1/connection', route => revoked
+    ? route.fulfill({ json: { connected: false, core: true, server_configured: true, message: 'Immich access disabled in Pocket Core' } })
+    : route.fallback())
+  const stableTile = await page.locator('.tile').first().elementHandle()
+  const refreshed = page.waitForResponse(r => r.url().endsWith('/api/v1/connection'))
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await refreshed
+  await page.waitForTimeout(100)
+  assert.equal(await stableTile.evaluate(el => el.isConnected), true, 'unchanged status keeps the grid mounted')
+  await page.goto(base + '/settings/library')
+  await page.getByText('connected through Pocket Core', { exact: false }).waitFor()
+  revoked = true
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await page.getByText('Not connected', { exact: true }).waitFor()
+  assert.equal(await page.locator('.lib-account').count(), 0, 'revocation clears account details')
+  assert.equal(await page.locator('.set-stats').count(), 0, 'revocation clears library counts')
+  await page.getByText('Immich access disabled in Pocket Core').waitFor()
+  revoked = false
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await page.getByText('Connected', { exact: true }).waitFor()
+  await page.goto(base + '/')
+  await page.locator('.tile').first().waitFor()
+  const denyLibraryRequest = route => route.fulfill({ status: 409, json: { code: 'connection_unavailable', error: 'Immich access disabled in Pocket Core' } })
+  await page.route('**/api/v1/immich/search/metadata', denyLibraryRequest)
+  await page.locator('.timeline-year-jump').last().click()
+  await page.locator('.connect-card').waitFor()
+  assert.equal(await page.locator('.tile').count(), 0, 'an access refusal immediately removes the library')
+  await page.unroute('**/api/v1/immich/search/metadata', denyLibraryRequest)
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await page.locator('.tile').first().waitFor()
+  await page.clock.install()
+  await page.goto(base + '/')
+  await page.locator('.tile').first().waitFor()
+  revoked = true
+  await page.clock.fastForward(16000)
+  await page.locator('.connect-card').waitFor()
+  assert.equal(await page.locator('.tile').count(), 0, 'periodic check removes the revoked library')
+  console.log('PASS: Core revocation on focus and while open; account/counts cleared; unchanged checks preserve grid')
 
   assert.deepEqual(errors, [])
   console.log(`PASS: ${photos.length}-photo library, viewer details/description/favorite/navigation, portrait fit, zoom to the pointer + pan + keys + ctrl-wheel, add to album, protected sharing link, palette search, albums/people/memories/places/sharing, map zoom/pan/counts/viewer, timeline year/month jumps and mobile toggle, Files + Documents imports, clouds (cards, filters + endless scroll, import, lightbox place, account map, rescan polling, add WebDAV / Nextcloud via Core / Drive OAuth, someone else's 404, Places markers), upload tray, theme from Settings, five widths with the phone drawer.`)

@@ -28,6 +28,7 @@ async function request<T>(method: string, url: string, body?: unknown, signal?: 
       const m = data.message
       msg = (data.error as string) || (Array.isArray(m) ? m.join(', ') : (m as string)) || msg
     } catch {}
+    if (data.code === 'connection_unavailable') window.dispatchEvent(new CustomEvent('pp:connection-unavailable', { detail: msg }))
     throw new ApiError(res.status, msg, data)
   }
   if (res.status === 204) return undefined as T

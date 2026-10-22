@@ -44,14 +44,14 @@ export function Sidebar({ onNew, onNavigate }: { onNew: (k: NewKind) => void; on
           {SOURCES.map(s => (
             <li key={s.id} className="cal-row">
               <NavLink to={`/sources/${s.id}`} onClick={onNavigate} className={`cal-check ${loc.pathname === `/sources/${s.id}` ? 'is-active' : ''}`} title={s.desc}>
-                <span className="space-ico"><Icon name={s.icon} size={16} /></span>
+                <span className="space-ico"><img src={s.appIcon} alt="" width={20} height={20} /></span>
                 <span className="cal-name ellipsis">{s.label}</span>
               </NavLink>
             </li>
           ))}
           {(clouds || []).map(c => (
             <li key={'cloud-' + c.id} className="cal-row">
-              <NavLink to={`/sources/cloud/${c.id}`} onClick={onNavigate} className={`cal-check ${loc.pathname === `/sources/cloud/${c.id}` ? 'is-active' : ''}`} title={`${cloudKind(c.kind).label} · ${cloudStatus(c)} · ${cloudCounts(c)}`}>
+              <NavLink to={`/sources/cloud/${c.id}`} onClick={onNavigate} className={`cal-check ${loc.pathname === `/sources/cloud/${c.id}` ? 'is-active' : ''} ${c.status === 'scanning' ? 'is-scanning' : ''}`} title={`${cloudKind(c.kind).label} · ${cloudStatus(c)} · ${cloudCounts(c)}`}>
                 <span className="space-ico"><Icon name={cloudKind(c.kind).icon} size={16} /></span>
                 <span className="cal-name ellipsis">{c.name}</span>
                 {c.status === 'scanning' && <span className="sb-scan" aria-label="Scanning" />}

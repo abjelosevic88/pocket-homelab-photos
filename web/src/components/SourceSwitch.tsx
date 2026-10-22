@@ -13,7 +13,7 @@ export function SourceSwitch({ active, disabled }: { active: string; disabled?: 
     <div className="source-switch" role="tablist" aria-label="Source">
       {SOURCES.map(s => (
         <button key={s.id} type="button" role="tab" aria-selected={s.id === active} disabled={disabled} className={`source-tab ${s.id === active ? 'active' : ''}`} onClick={() => navigate(`/sources/${s.id}`)}>
-          <span className="source-ico"><Icon name={s.icon} size={18} /></span>
+          <img className="source-app-icon" src={s.appIcon} alt="" width={36} height={36} />
           <span className="grow"><b>{s.label}</b><small>{s.desc}</small></span>
         </button>
       ))}

@@ -317,3 +317,62 @@ func TestSourceImportUsesDelegatedReadAndKeepsSourceUnchanged(t *testing.T) {
 		})
 	}
 }
+
+// Neither the settings status nor media/API requests may reuse a credential
+// after Core revokes it, even if the SDK already has a warm credential cache.
+func TestCoreImmichRevocation(t *testing.T) {
+	for _, reason := range []string{"off_admin", "off_person", "unavailable"} {
+		t.Run(reason, func(t *testing.T) {
+			var blocked atomic.Bool
+			var upstreamCalls atomic.Int32
+			up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				upstreamCalls.Add(1)
+				writeJSON(w, 200, map[string]string{"id": "test-user"})
+			}))
+			defer up.Close()
+			coreServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v1/services/credential" {
+					t.Errorf("unexpected Core request: %s", r.URL.Path)
+				}
+				if blocked.Load() {
+					if reason == "unavailable" {
+						writeErr(w, 503, "Core unavailable")
+					} else {
+						writeJSON(w, 403, map[string]string{"reason": reason, "error": "Immich access disabled"})
+					}
+					return
+				}
+				writeJSON(w, 200, map[string]string{"url": up.URL, "key": "test-key"})
+			}))
+			defer coreServer.Close()
+			s := testServer(t, "")
+			s.core = core.New(coreServer.URL, core.Options{})
+			cookie := account(t, s, "a@example.com")
+			if _, err := s.core.ServiceFor(context.Background(), "a@example.com", "immich"); err != nil {
+				t.Fatal(err)
+			}
+			if w := request(s, "GET", "/api/v1/connection", nil, cookie); !strings.Contains(w.Body.String(), `"connected":true`) {
+				t.Fatal(w.Body.String())
+			}
+			blocked.Store(true)
+			before := upstreamCalls.Load()
+			for _, path := range []string{"/api/v1/immich/assets/statistics", "/api/v1/immich/assets/12345678-1234-4234-8234-123456789abc/thumbnail"} {
+				w := request(s, "GET", path, nil, cookie)
+				if w.Code != 409 || !strings.Contains(w.Body.String(), `"code":"connection_unavailable"`) {
+					t.Fatal(path, w.Code, w.Body.String())
+				}
+			}
+			w := request(s, "GET", "/api/v1/connection", nil, cookie)
+			if w.Code != 200 || !strings.Contains(w.Body.String(), `"connected":false`) || strings.Contains(w.Body.String(), "test-key") {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			if upstreamCalls.Load() != before {
+				t.Fatal("Immich was contacted after Core denied access")
+			}
+			blocked.Store(false)
+			if w := request(s, "GET", "/api/v1/connection", nil, cookie); !strings.Contains(w.Body.String(), `"connected":true`) {
+				t.Fatal("connection did not recover", w.Body.String())
+			}
+		})
+	}
+}
