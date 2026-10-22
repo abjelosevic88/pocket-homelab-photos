@@ -35,6 +35,8 @@ shown in the sidebar.
 | `albums.png` | Albums |
 | `places.png` | Places: the bundled world map with a place picked |
 | `sources.png` | Choosing photos in Pocket Files to import |
+| `clouds.png` | A connected cloud (Nextcloud through Pocket Core): indexed photos by month, in-library and location badges |
+| `clouds-map.png` | Places with the clouds’ photos as hollow markers and a cloud place picked |
 | `people.png` | People found by Immich |
 | `memories.png` | Memories: one year ago today |
 | `library-dark.png` | Dark mode |

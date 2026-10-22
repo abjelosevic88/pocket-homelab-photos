@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { api, V1 } from '../../lib/api'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { api, clouds as cloudApi, V1 } from '../../lib/api'
 import { useApp } from '../../lib/app-context'
-import type { User } from '../../lib/types'
+import type { CloudAccount, User } from '../../lib/types'
+import { cloudCounts, cloudKind, cloudStatus } from '../../lib/clouds'
+import { AddCloud } from '../../components/AddCloud'
 import { SOURCES } from '../../lib/nav'
 import { bytes, plural } from '../../lib/photos'
 import { Icon } from '../../components/icons'
-import { Avatar, Field, Segmented, SettingRow, errMsg, useToast } from '../../components/ui'
+import { Avatar, Confirm, Field, Modal, Segmented, SettingRow, Spinner, errMsg, useToast } from '../../components/ui'
 
 export function Section({ title, sub, actions, children }: { title: React.ReactNode; sub?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -122,9 +124,56 @@ export function LibraryTab() {
 }
 
 export function SourcesTab() {
+  const { clouds, reloadClouds } = useApp()
+  const { toast } = useToast()
+  const [sp, setSp] = useSearchParams()
+  const [adding, setAdding] = useState(false)
+  const [editing, setEditing] = useState<CloudAccount | null>(null)
+  const [removing, setRemoving] = useState<CloudAccount | null>(null)
+  const [returned, setReturned] = useState('')
+
+  // Back from a cloud's sign-in page (?cloud=ID or ?error=…), or sent here to add one (?add=1).
+  useEffect(() => {
+    const added = sp.get('cloud'), err = sp.get('error'), add = sp.get('add')
+    if (!added && !err && !add) return
+    if (added) { reloadClouds(); toast('Connected — Photos is looking for your photos now') }
+    if (err) setReturned(err)
+    if (add) setAdding(true)
+    setSp({}, { replace: true })
+  }, [sp]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const act = async (fn: () => Promise<unknown>, ok: string) => { try { await fn(); await reloadClouds(); toast(ok) } catch (e) { toast(errMsg(e), 'err') } }
+  const reconnect = async (a: CloudAccount) => { try { const { url } = await cloudApi.oauthStart(a.kind, a.id); window.location.href = url } catch (e) { toast(errMsg(e), 'err') } }
+
   return (
     <div className="stack loose">
-      <Section title="Where else your photos are" sub="Pocket Core decides what Photos may read, with your own permissions. Manage it in Core → Apps acting for me.">
+      <Section title="Clouds" sub="Index the photos in your other clouds without copying them: review them here, see them on the map and import what you pick. Only you see your clouds."
+        actions={<button type="button" className="btn sm primary" onClick={() => setAdding(true)}><Icon name="plus" size={15} />Add a cloud</button>}>
+        {returned && <div className="callout danger"><Icon name="alert" size={15} /><span className="grow">The cloud was not connected: {returned}</span><button type="button" className="btn ghost icon-only sm" aria-label="Dismiss" onClick={() => setReturned('')}><Icon name="x" size={14} /></button></div>}
+        {clouds && !clouds.length && <p className="muted small">No clouds yet. Connect Nextcloud, any WebDAV server, an S3 bucket, Google Drive, OneDrive or Dropbox.</p>}
+        {!!clouds?.length && (
+          <div className="set-list clouds-list">
+            {clouds.map(a => (
+              <div key={a.id} className={`set-list-row cloud-row ${a.status}`}>
+                <span className="acct-ico"><Icon name={cloudKind(a.kind).icon} size={18} /></span>
+                <div className="grow">
+                  <div className="acct-name"><span className="ellipsis">{a.name}</span>{a.status === 'scanning' && <Spinner size={12} />}</div>
+                  <div className="muted small">{cloudKind(a.kind).label}{a.via === 'core' ? ' · via Pocket Core' : a.login ? ' · ' + a.login : ''}{a.root ? ' · ' + a.root : ''}</div>
+                  <div className={`small ${a.status === 'error' || a.status === 'reconnect' ? 'danger-text' : 'muted'}`}>{cloudStatus(a)} · {cloudCounts(a)}</div>
+                </div>
+                <div className="row cloud-actions">
+                  {a.status === 'reconnect' && <button type="button" className="btn sm primary" onClick={() => reconnect(a)}>Reconnect</button>}
+                  <Link className="btn sm" to={`/sources/cloud/${a.id}`}>Open</Link>
+                  <button type="button" className="btn sm" disabled={a.status === 'scanning'} onClick={() => act(() => cloudApi.scan(a.id), `Scanning ${a.name}…`)}>Rescan</button>
+                  <button type="button" className="btn ghost sm" onClick={() => setEditing(a)}>Edit</button>
+                  <button type="button" className="btn ghost icon-only sm" aria-label={`Remove ${a.name}`} title="Remove" onClick={() => setRemoving(a)}><Icon name="trash" size={15} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+      <Section title="Your Pocket apps" sub="Pocket Core decides what Photos may read, with your own permissions. Manage it in Core → Apps acting for me.">
         <div className="set-list">
           {SOURCES.map(s => (
             <div key={s.id} className="set-list-row">
@@ -138,12 +187,39 @@ export function SourcesTab() {
       <Section title="How importing works">
         <ul className="set-bullets">
           <li>You pick the photos; Photos copies those originals into your Immich. Nothing syncs in the background.</li>
-          <li>The files in Pocket Files and Pocket Documents are never changed, moved or deleted.</li>
+          <li>Clouds, Pocket Files and Pocket Documents are only ever read: nothing there is changed, moved or deleted.</li>
+          <li>Clouds are rescanned by themselves every few hours; unchanged files are not read again.</li>
           <li>Immich recognises duplicates, so importing the same photo twice does no harm.</li>
           <li>A copy in your library stays yours even if access to the source is taken away later.</li>
         </ul>
       </Section>
+      {adding && <AddCloud onClose={() => setAdding(false)} onAdded={a => { setAdding(false); reloadClouds(); toast(`${a.name} connected — Photos is looking for your photos now`) }} />}
+      {editing && <EditCloud account={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reloadClouds(); toast('Saved') }} />}
+      {removing && <Confirm title={`Remove ${removing.name}?`} confirmLabel="Remove"
+        message={<>Photos forgets this cloud, its index and thumbnails. Nothing in {removing.name} is touched, and photos you already imported stay in your library.</>}
+        onCancel={() => setRemoving(null)} onConfirm={() => { const a = removing; setRemoving(null); act(() => cloudApi.remove(a.id), `${a.name} removed`) }} />}
     </div>
+  )
+}
+
+function EditCloud({ account, onClose, onSaved }: { account: CloudAccount; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(account.name)
+  const [root, setRoot] = useState(account.root)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const save = async () => {
+    setBusy(true); setError('')
+    try { await cloudApi.update(account.id, { name: name.trim() || account.name, root: root.trim() }); onSaved() } catch (e) { setError(errMsg(e)) } finally { setBusy(false) }
+  }
+  return (
+    <Modal title={`Edit ${account.name}`} onClose={onClose} footer={<><span className="spacer" /><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="button" className="btn primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</button></>}>
+      <form className="stack" onSubmit={e => { e.preventDefault(); save() }}>
+        <Field label="Name"><input value={name} onChange={e => setName(e.target.value)} autoFocus /></Field>
+        <Field label="Folder (optional)" help="Only photos below this folder; empty = everything. A change rescans the cloud."><input value={root} onChange={e => setRoot(e.target.value)} placeholder="/Photos" spellCheck={false} /></Field>
+        {error && <div className="callout danger"><Icon name="alert" size={15} /><span>{error}</span></div>}
+        <button type="submit" hidden />
+      </form>
+    </Modal>
   )
 }
 

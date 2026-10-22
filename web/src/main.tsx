@@ -16,6 +16,7 @@ import { Albums, Memories, People } from './pages/Collections'
 import Places from './pages/Places'
 import Sharing from './pages/Sharing'
 import Sources from './pages/Sources'
+import CloudSource from './pages/CloudSource'
 import Settings from './pages/Settings'
 
 function Gate({ children }: { children: React.ReactNode }) {
@@ -64,6 +65,7 @@ function App() {
             <Route path="/places/:place" element={<Gallery key="place" view="place" />} />
             <Route path="/memories" element={<Memories />} />
             <Route path="/sharing" element={<Sharing />} />
+            <Route path="/sources/cloud/:id" element={<CloudSource key="cloud" />} />
             <Route path="/sources/:source?" element={<Sources />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

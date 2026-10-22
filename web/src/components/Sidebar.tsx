@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useApp } from '../lib/app-context'
+import { cloudCounts, cloudKind, cloudStatus } from '../lib/clouds'
 import { LIBRARY_NAV, MORE_NAV, SOURCES } from '../lib/nav'
 import { bytes } from '../lib/photos'
 import { Icon } from './icons'
@@ -9,7 +10,7 @@ import { newItems, type NewKind } from './Layout'
 import { type Anchor, Menu, rectOf } from './ui'
 
 export function Sidebar({ onNew, onNavigate }: { onNew: (k: NewKind) => void; onNavigate: () => void }) {
-  const { status, connection, stats } = useApp()
+  const { status, connection, stats, clouds } = useApp()
   const loc = useLocation()
   const [menu, setMenu] = useState<Anchor | null>(null)
   const title = status?.title || 'Pocket Photos'
@@ -45,6 +46,16 @@ export function Sidebar({ onNew, onNavigate }: { onNew: (k: NewKind) => void; on
               <NavLink to={`/sources/${s.id}`} onClick={onNavigate} className={`cal-check ${loc.pathname === `/sources/${s.id}` ? 'is-active' : ''}`} title={s.desc}>
                 <span className="space-ico"><Icon name={s.icon} size={16} /></span>
                 <span className="cal-name ellipsis">{s.label}</span>
+              </NavLink>
+            </li>
+          ))}
+          {(clouds || []).map(c => (
+            <li key={'cloud-' + c.id} className="cal-row">
+              <NavLink to={`/sources/cloud/${c.id}`} onClick={onNavigate} className={`cal-check ${loc.pathname === `/sources/cloud/${c.id}` ? 'is-active' : ''}`} title={`${cloudKind(c.kind).label} · ${cloudStatus(c)} · ${cloudCounts(c)}`}>
+                <span className="space-ico"><Icon name={cloudKind(c.kind).icon} size={16} /></span>
+                <span className="cal-name ellipsis">{c.name}</span>
+                {c.status === 'scanning' && <span className="sb-scan" aria-label="Scanning" />}
+                {(c.status === 'error' || c.status === 'reconnect') && <Icon name="alert" size={13} className="warn-text" title={cloudStatus(c)} />}
               </NavLink>
             </li>
           ))}

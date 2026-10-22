@@ -37,10 +37,16 @@ type Server struct {
 	provisionMu sync.Mutex
 	started     time.Time
 	requests    atomic.Int64
+
+	bg              context.Context // lives as long as the server; background scans run under it
+	scans           cloudScans
+	thumbSlots      chan struct{}
+	cloudClient     *http.Client
+	cloudClientOnce sync.Once
 }
 
 func New(cfg *config.Config, st *store.Store, log *slog.Logger, web fs.FS) *Server {
-	return &Server{cfg: cfg, store: st, log: log, webFS: web, started: time.Now(), http: &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, DialContext: (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 45 * time.Second, IdleConnTimeout: 90 * time.Second, MaxIdleConns: 100, MaxIdleConnsPerHost: 16}, Timeout: 30 * time.Minute, CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}, core: core.New(cfg.CoreURL, core.Options{DB: st.DB, TokenFile: cfg.DataDir + "/core.token", UserAgent: "PocketPhotos/" + Version})}
+	return &Server{cfg: cfg, store: st, log: log, webFS: web, started: time.Now(), bg: context.Background(), thumbSlots: make(chan struct{}, 4), http: &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, DialContext: (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 45 * time.Second, IdleConnTimeout: 90 * time.Second, MaxIdleConns: 100, MaxIdleConnsPerHost: 16}, Timeout: 30 * time.Minute, CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}, core: core.New(cfg.CoreURL, core.Options{DB: st.DB, TokenFile: cfg.DataDir + "/core.token", UserAgent: "PocketPhotos/" + Version})}
 }
 func (s *Server) Bootstrap(ctx context.Context) error {
 	if err := s.loadSecretKey(); err != nil {
@@ -68,6 +74,8 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	if s.core.Configured() {
 		go s.coreLoop(ctx)
 	}
+	s.bg = ctx
+	go s.cloudLoop(ctx)
 	_ = s.store.PurgeSessions(ctx)
 	go func() {
 		ticker := time.NewTicker(time.Hour)
@@ -85,7 +93,7 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 }
 func (s *Server) coreLoop(ctx context.Context) {
 	for {
-		m := core.Manifest{Slug: "photos", Name: "Pocket Photos", Description: "Your photo library across Immich, Pocket Files and Pocket Documents", Icon: "/favicon.svg", Version: Version, URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "PHOTOS", Services: []core.ServiceUse{{Type: "immich", Reason: "Your photo library, albums, search and memories"}}, Uses: []core.Use{{App: "files", Scopes: []string{"files:read"}, Reason: "Browse photos in your files and copy selected originals into your photo library"}, {App: "documents", Scopes: []string{"documents:read"}, Reason: "Find image documents and copy selected originals into your photo library"}}}
+		m := core.Manifest{Slug: "photos", Name: "Pocket Photos", Description: "Your photo library across Immich, Pocket Files and Pocket Documents", Icon: "/favicon.svg", Version: Version, URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "PHOTOS", Services: []core.ServiceUse{{Type: "immich", Reason: "Your photo library, albums, search and memories"}, {Type: "nextcloud", Reason: "Index the photos in your Nextcloud, see them on the map and import the ones you pick"}}, Uses: []core.Use{{App: "files", Scopes: []string{"files:read"}, Reason: "Browse photos in your files and copy selected originals into your photo library"}, {App: "documents", Scopes: []string{"documents:read"}, Reason: "Find image documents and copy selected originals into your photo library"}}}
 		if s.cfg.BaseURL != "" {
 			m.OIDC = &core.OIDCRequest{RedirectURIs: []string{s.cfg.BaseURL + "/api/v1/auth/oidc/callback"}}
 		}
@@ -142,6 +150,21 @@ func (s *Server) Router() http.Handler {
 			r.Delete("/connection", s.handleDisconnect)
 			r.Get("/sources/{app}/*", s.handleSource)
 			r.Post("/sources/{app}/import", s.handleImport)
+			r.Get("/clouds/providers", s.handleCloudProviders)
+			r.Get("/clouds", s.handleListClouds)
+			r.Post("/clouds", s.handleCreateCloud)
+			r.Get("/clouds/oauth/{kind}/start", s.handleCloudOAuthStart)
+			r.Get("/clouds/oauth/{kind}/callback", s.handleCloudOAuthCallback)
+			r.Get("/clouds/items", s.handleCloudItems)
+			r.Get("/clouds/map", s.handleCloudMap)
+			r.Get("/clouds/items/{id}", s.handleCloudItem)
+			r.Get("/clouds/items/{id}/thumb", s.handleCloudThumb)
+			r.Get("/clouds/items/{id}/preview", s.handleCloudPreview)
+			r.Get("/clouds/items/{id}/original", s.handleCloudOriginal)
+			r.Post("/clouds/items/{id}/import", s.handleCloudImport)
+			r.Put("/clouds/{id}", s.handleUpdateCloud)
+			r.Delete("/clouds/{id}", s.handleDeleteCloud)
+			r.Post("/clouds/{id}/scan", s.handleScanCloud)
 			r.Handle("/immich/*", http.HandlerFunc(s.handleImmich))
 			r.Get("/users", s.handleListUsers)
 			r.Post("/users", s.handleCreateUser)

@@ -1,16 +1,17 @@
 // Every list of photos: the library, favorites, videos, recently added, archive, trash,
 // search results, an album, a person and a place.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { IMMICH, immich, isAbort } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import type { GalleryView } from '../lib/nav'
-import { type Grouping, plural } from '../lib/photos'
+import { type Grouping, plural, thumb } from '../lib/photos'
 import type { Album, Asset, Person } from '../lib/types'
 import { AlbumPicker, ShareDialog } from '../components/dialogs'
 import { Icon } from '../components/icons'
 import { Crumb, usePageTitle } from '../components/Layout'
 import { NeedsLibrary } from '../components/Library'
+import { PhotoTimeline } from '../components/PhotoTimeline'
 import { PhotoGrid } from '../components/PhotoGrid'
 import { Select } from '../components/Select'
 import { Viewer } from '../components/Viewer'
@@ -27,6 +28,29 @@ const GROUPINGS: { value: Grouping; label: string }[] = [{ value: 'all', label: 
 const SEARCH_IN = [{ value: 'smart', label: 'What is in the photo' }, { value: 'filename', label: 'File names' }, { value: 'ocr', label: 'Text in photos' }]
 const MEDIA = [{ value: '', label: 'Photos and videos' }, { value: 'IMAGE', label: 'Photos' }, { value: 'VIDEO', label: 'Videos' }]
 
+async function warmThumbnails(assets: Asset[], signal: AbortSignal) {
+  if (signal.aborted) return
+  await new Promise<void>(resolve => {
+    const images: HTMLImageElement[] = []
+    let remaining = assets.length
+    const finish = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', finish)
+      for (const image of images) { image.onload = null; image.onerror = null }
+      resolve()
+    }
+    const timer = window.setTimeout(finish, 1500)
+    signal.addEventListener('abort', finish, { once: true })
+    if (!remaining) { finish(); return }
+    for (const asset of assets) {
+      const image = new Image()
+      images.push(image)
+      image.onload = image.onerror = () => { if (--remaining === 0) finish() }
+      image.src = thumb(asset)
+    }
+  })
+}
+
 export default function Gallery({ view }: { view: GalleryView }) {
   return <NeedsLibrary><GalleryInner view={view} /></NeedsLibrary>
 }
@@ -40,6 +64,9 @@ function GalleryInner({ view }: { view: GalleryView }) {
   const [assets, setAssets] = useState<Asset[]>([])
   const [next, setNext] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [replacing, setReplacing] = useState(false)
+  const scrollAfterLoad = useRef(false)
+  const scrollOnCommit = useRef(false)
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [selecting, setSelecting] = useState(false)
@@ -51,6 +78,9 @@ function GalleryInner({ view }: { view: GalleryView }) {
   const generation = useRef(0)
   const abort = useRef<AbortController | null>(null)
 
+  const [timelineOpen, setTimelineOpen] = useState(false)
+  const jumpDate = view === 'library' && /^\d{4}(-\d{2})?$/.test(sp.get('date') || '') ? sp.get('date')! : ''
+  const [visibleMonth, setVisibleMonth] = useState('')
   const q = sp.get('q') || ''
   const searchIn = sp.get('in') || 'smart'
   const type = sp.get('type') || ''
@@ -59,6 +89,8 @@ function GalleryInner({ view }: { view: GalleryView }) {
   const album: Album | undefined = view === 'album' ? albums.find(a => a.id === id) : undefined
   const city = decodeURIComponent(place)
   const smart = view === 'search' && !!q && searchIn === 'smart'
+  const scope = JSON.stringify([view, id, city, type, from, until, q, searchIn])
+  const previousScope = useRef(scope)
 
   useEffect(() => {
     if (view !== 'person') { setPerson(null); return }
@@ -86,38 +118,59 @@ function GalleryInner({ view }: { view: GalleryView }) {
     if (view === 'person') f.personIds = { any: [id] }
     if (view === 'place') f.city = { eq: city }
     if (from || until) f.takenAt = { ...(from ? { gte: new Date(from + 'T00:00:00').toISOString() } : {}), ...(until ? { lte: new Date(until + 'T23:59:59').toISOString() } : {}) }
+    if (jumpDate) {
+      const year = Number(jumpDate.slice(0, 4)), month = jumpDate.length === 7 ? Number(jumpDate.slice(5)) : 12
+      f.takenAt = { lt: new Date(year, month, 1).toISOString() }
+    }
     if (view === 'search' && q && searchIn === 'ocr') f.ocr = { matches: q }
     if (view === 'search' && q && searchIn === 'filename') f.originalFileName = { like: '%' + q + '%' }
     return f
-  }, [view, id, city, type, from, until, q, searchIn])
+  }, [view, id, city, type, from, until, q, searchIn, jumpDate])
 
   const load = useCallback(async (cursor?: string) => {
     const g = generation.current
     if (!cursor) abort.current?.abort()
     const c = new AbortController()
     abort.current = c
-    setLoading(true); setError('')
+    setLoading(true); setReplacing(!cursor); setError('')
     try {
       const body = {
         filter: filter(), size: 120, withExif: true,
-        ...(smart ? { query: q, page: Number(cursor || 1) } : { ...(cursor ? { cursor } : {}), orderBy: { field: view === 'recent' ? 'createdAt' : 'fileCreatedAt', direction: order } }),
+        ...(smart ? { query: q } : { ...(cursor ? { cursor } : {}), orderBy: { field: view === 'recent' ? 'createdAt' : 'fileCreatedAt', direction: jumpDate ? 'desc' : order } }),
       }
-      const v = await immich.post<{ assets: { items: Asset[]; nextCursor?: string | null; nextPage?: string | null } }>(smart ? '/search/smart' : '/search/metadata', body, c.signal)
-      if (g !== generation.current) return
+      const v = await immich.post<{ assets: { items: Asset[]; nextCursor?: string | null } }>(smart ? '/search/smart' : '/search/metadata', body, c.signal)
+      if (g !== generation.current || c.signal.aborted) return
+      if (!cursor && scrollAfterLoad.current) {
+        // Warm the first screen before swapping grids, so new thumbnails don't flash blank.
+        await warmThumbnails(v.assets.items.slice(0, 18), c.signal)
+        if (g !== generation.current || c.signal.aborted) return
+        scrollOnCommit.current = true
+        scrollAfterLoad.current = false
+      }
       setAssets(old => (cursor ? [...old, ...v.assets.items.filter(a => !old.some(o => o.id === a.id))] : v.assets.items))
-      setNext((smart ? v.assets.nextPage : v.assets.nextCursor) || null)
+      // Structured smart search returns the best matches without pagination.
+      setNext(smart ? null : v.assets.nextCursor || null)
     } catch (e) {
-      if (!isAbort(e) && g === generation.current) setError(errMsg(e))
-    } finally { if (g === generation.current) setLoading(false) }
-  }, [filter, smart, q, order, view])
+      if (!isAbort(e) && g === generation.current) { setError(errMsg(e)); scrollAfterLoad.current = false }
+    } finally { if (g === generation.current) { setLoading(false); setReplacing(false) } }
+  }, [filter, smart, q, order, view, jumpDate])
 
   useEffect(() => {
     generation.current++
-    setAssets([]); setNext(null); setSelected(new Set()); setSelecting(false); setViewer(null)
-    if (view === 'search' && !q && !type && !from && !until) { setLoading(false); return }
+    // A date jump or refresh keeps the current grid mounted while its replacement loads.
+    if (previousScope.current !== scope) { setAssets([]); scrollAfterLoad.current = false }
+    previousScope.current = scope
+    setNext(null); setVisibleMonth(''); setSelected(new Set()); setSelecting(false); setViewer(null)
+    if (view === 'search' && !q && !type && !from && !until) { setAssets([]); setLoading(false); setReplacing(false); return }
     load()
     return () => abort.current?.abort()
   }, [load, version]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useLayoutEffect(() => {
+    if (!scrollOnCommit.current) return
+    scrollOnCommit.current = false
+    document.querySelector('.content')?.scrollTo({ top: 0, behavior: 'instant' })
+  }, [assets])
 
   // more as the end of the page comes into view
   const sentinel = useRef<HTMLDivElement>(null)
@@ -131,13 +184,45 @@ function GalleryInner({ view }: { view: GalleryView }) {
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
+      if (replacing) return
       if ((e.target as HTMLElement).closest('input,textarea') || document.querySelector('.modal-backdrop, .palette-backdrop, .viewer')) return
       if ((e.metaKey || e.ctrlKey) && e.key === 'a') { e.preventDefault(); setSelected(new Set(assets.map(a => a.id))); setSelecting(true) }
       if (e.key === 'Escape' && (selected.size || selecting)) { setSelected(new Set()); setSelecting(false) }
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [assets, selected, selecting])
+  }, [assets, selected, selecting, replacing])
+
+  const jumpToDate = (date: string) => {
+    if (date === jumpDate && order === 'desc') {
+      document.querySelector('.content')?.scrollTo({ top: 0, behavior: 'instant' })
+      setVisibleMonth('')
+      return
+    }
+    scrollAfterLoad.current = true
+    setOrder('desc')
+    setVisibleMonth('')
+    setSp(prev => { const next = new URLSearchParams(prev); if (date) next.set('date', date); else next.delete('date'); return next })
+  }
+  // Follow the month at the top of the viewport, including newly paginated photos.
+  useEffect(() => {
+    if (view !== 'library' || replacing) return
+    const root = document.querySelector('.content')
+    if (!root) return
+    let frame = 0
+    const update = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        if (root.scrollTop < 80) { setVisibleMonth(''); return }
+        const top = root.getBoundingClientRect().top + 100
+        const tile = [...root.querySelectorAll<HTMLElement>('[data-photo-month]')].find(el => el.getBoundingClientRect().bottom >= top)
+        if (tile) setVisibleMonth(tile.dataset.photoMonth || '')
+      })
+    }
+    root.addEventListener('scroll', update, { passive: true })
+    update()
+    return () => { cancelAnimationFrame(frame); root.removeEventListener('scroll', update) }
+  }, [view, assets, replacing])
 
   const ids = [...selected]
   const done = (msg: string) => { toast(msg); setSelected(new Set()); setSelecting(false); setDialog(null); bump() }
@@ -187,7 +272,8 @@ function GalleryInner({ view }: { view: GalleryView }) {
   )
 
   return (
-    <div className="page gallery">
+    <div className={`page gallery ${view === 'library' ? 'timeline-layout' : ''}`}>
+      <div className="gallery-main">
       <PageHeader title={title} sub={sub} actions={view === 'album' || view === 'person' ? headerActions : undefined} />
       {view === 'search' && (
         <div className="search-bar">
@@ -228,15 +314,20 @@ function GalleryInner({ view }: { view: GalleryView }) {
         <div className="gallery-tools">
           <Segmented value={grouping} onChange={setGrouping} options={GROUPINGS} size="sm" label="Group photos" />
           <span className="spacer" />
-          {view !== 'recent' && !smart && <Select value={order} options={[{ value: 'desc', label: 'Newest first' }, { value: 'asc', label: 'Oldest first' }]} onChange={setOrder} label="Sort photos" size="sm" className="ghost inline sort-select" width={170} />}
+          {view === 'library' && <button type="button" className="btn sm timeline-mobile-toggle" aria-controls="photo-timeline" aria-expanded={timelineOpen} onClick={() => setTimelineOpen(o => !o)}><Icon name="clock" size={14} />Timeline</button>}
+          {view !== 'recent' && !smart && <Select value={order} options={[{ value: 'desc', label: 'Newest first' }, { value: 'asc', label: 'Oldest first' }]} onChange={v => { if (jumpDate) jumpToDate(''); setOrder(v) }} label="Sort photos" size="sm" className="ghost inline sort-select" width={170} />}
           <button type="button" className="btn ghost icon-only sm" aria-label={density === 'compact' ? 'Larger thumbnails' : 'Smaller thumbnails'} title={density === 'compact' ? 'Larger thumbnails' : 'Smaller thumbnails'} onClick={() => setDensity(density === 'compact' ? 'comfortable' : 'compact')}><Icon name={density === 'compact' ? 'zoom-in' : 'grid'} size={16} /></button>
-          <button type="button" className="btn sm" onClick={() => setSelecting(true)} disabled={!assets.length}><Icon name="check-circle" size={14} />Select</button>
+          <button type="button" className="btn sm" onClick={() => setSelecting(true)} disabled={!assets.length || replacing}><Icon name="check-circle" size={14} />Select</button>
         </div>
       )}
 
+      {view === 'library' && <div className="timeline-position"><span>{jumpDate ? <>Browsing from {jumpDate.length === 7 ? new Date(Number(jumpDate.slice(0, 4)), Number(jumpDate.slice(5)) - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : jumpDate}</> : 'Latest photos'}</span><button type="button" className="btn ghost sm" style={{ visibility: jumpDate ? 'visible' : 'hidden' }} onClick={() => jumpToDate('')}>Back to latest</button></div>}
       {error && <div className="callout danger"><Icon name="alert" size={15} /><span className="grow">{error}</span><button type="button" className="btn sm" onClick={() => load()}>Try again</button></div>}
-      {assets.length > 0 && <PhotoGrid assets={assets} grouping={grouping} selected={selected} setSelected={setSelected} selecting={selecting} onOpen={setViewer} />}
-      {loading && <Loading label={assets.length ? 'Loading more…' : 'Loading your moments…'} />}
+      {assets.length > 0 && <div className="gallery-results" aria-busy={replacing}>
+        {replacing && <span className="gallery-refresh-status" role="status">Loading photos…</span>}
+        <div inert={replacing || undefined}><PhotoGrid assets={assets} grouping={grouping} selected={selected} setSelected={setSelected} selecting={selecting} onOpen={setViewer} /></div>
+      </div>}
+      {loading && (!assets.length || !replacing) && <Loading label={assets.length ? 'Loading more…' : 'Loading your moments…'} />}
       {!loading && !error && !assets.length && (
         view === 'search' && !q && !type && !from && !until
           ? <Empty icon="search" title="Find the moment you have in mind">Describe what is in the photo — “sunset over the sea”, “a dog in the snow” — or search file names and text in photos.</Empty>
@@ -263,6 +354,8 @@ function GalleryInner({ view }: { view: GalleryView }) {
       {dialog === 'name-person' && <Prompt title={person?.name ? 'Rename' : 'Who is this?'} label="Name" value={person?.name} onClose={() => setDialog(null)} onDone={async name => {
         try { await immich.put(`/people/${id}`, { name }); setDialog(null); bump(); toast('Saved') } catch (e) { toast(errMsg(e), 'err') }
       }} />}
+      </div>
+      {view === 'library' && <PhotoTimeline active={visibleMonth || jumpDate} onJump={jumpToDate} mobileOpen={timelineOpen} onClose={() => setTimelineOpen(false)} />}
     </div>
   )
 }

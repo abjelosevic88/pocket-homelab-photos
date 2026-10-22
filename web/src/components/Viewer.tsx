@@ -40,7 +40,7 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
   const hiTried = useRef(false)
   const current = useRef(asset.id); current.current = asset.id
   const go = (d: number) => { if (!editing) setIndex(Math.max(0, Math.min(assets.length - 1, index + d))) }
-  const zoomable = !editing && !live && asset.type !== 'VIDEO'
+  const zoomable = !editing && !live && detail.type !== 'VIDEO'
   const pz = usePanZoom({ width: detail.width || detail.exifInfo?.exifImageWidth || undefined, height: detail.height || detail.exifInfo?.exifImageHeight || undefined, enabled: zoomable, onSwipe: go })
 
   useEffect(() => { const prev = document.activeElement as HTMLElement | null; ref.current?.focus(); return () => prev?.focus?.() }, [])
@@ -84,7 +84,7 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
       return true
     } catch (e) { setError(errMsg(e)); return false } finally { setBusy(false) }
   }
-  const startEdit = () => { if (asset.type === 'VIDEO' || detail.isTrashed) return; setEditing(e => !e); setAngle(0); setMirror(false); setCrop(0) }
+  const startEdit = () => { if (detail.type === 'VIDEO' || detail.isTrashed) return; setEditing(e => !e); setAngle(0); setMirror(false); setCrop(0) }
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -153,7 +153,7 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
         <span className="spacer" />
         <button type="button" className={`vbtn ${detail.isFavorite ? 'fav' : ''}`} aria-label={detail.isFavorite ? 'Remove from favorites' : 'Add to favorites'} title="Favorite (f)" disabled={busy} onClick={() => update({ isFavorite: !detail.isFavorite })}><Icon name="heart" size={19} fill={detail.isFavorite} /></button>
         <button type="button" className={`vbtn ${info ? 'on' : ''}`} aria-label="Show photo information" aria-pressed={info} title="Details (i)" onClick={() => setInfo(!info)}><Icon name="info" size={19} /></button>
-        <button type="button" className={`vbtn ${editing ? 'on' : ''}`} aria-label="Edit photo" title="Edit (e)" disabled={asset.type === 'VIDEO' || detail.isTrashed} onClick={startEdit}><Icon name="edit" size={19} /></button>
+        <button type="button" className={`vbtn ${editing ? 'on' : ''}`} aria-label="Edit photo" title="Edit (e)" disabled={detail.type === 'VIDEO' || detail.isTrashed} onClick={startEdit}><Icon name="edit" size={19} /></button>
         <button type="button" className={`vbtn ${slide ? 'on' : ''}`} aria-label={slide ? 'Stop slideshow' : 'Start slideshow'} title="Slideshow (space)" onClick={() => setSlide(!slide)}><Icon name={slide ? 'pause' : 'play'} size={17} /></button>
         <a className="vbtn" href={original(asset.id)} download={detail.originalFileName} aria-label="Download original" title="Download original"><Icon name="download" size={19} /></a>
         <button type="button" className="vbtn" aria-label={detail.isTrashed ? 'Delete permanently' : 'Move to recently deleted'} title={detail.isTrashed ? 'Delete permanently' : 'Delete'} onClick={() => setConfirm(true)}><Icon name="trash" size={19} /></button>
@@ -164,7 +164,7 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
           onTouchStart={zoomable ? undefined : e => (touch.current = e.touches[0].clientX)}
           onTouchEnd={zoomable ? undefined : e => { const d = e.changedTouches[0].clientX - touch.current; if (Math.abs(d) > 70) go(d < 0 ? 1 : -1) }}>
           {!editing && index > 0 && <button type="button" className="viewer-nav prev" aria-label="Previous photo" onClick={() => go(-1)}><Icon name="chevron-left" size={26} /></button>}
-          {asset.type === 'VIDEO' || live ? (
+          {detail.type === 'VIDEO' || live ? (
             <video key={asset.id + String(live)} src={playback(live && detail.livePhotoVideoId ? detail.livePhotoVideoId : asset.id)} poster={thumb(detail, 'preview')} controls autoPlay playsInline
               onError={() => setError('This video could not be played. Try downloading the original.')} />
           ) : (
@@ -178,7 +178,7 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
             <div className="viewer-float">
               {detail.livePhotoVideoId && <button type="button" className="vpill" onClick={() => setLive(!live)}><Icon name="live" size={15} />{live ? 'Still photo' : 'Play Live Photo'}</button>}
               {zoomable && pz.zoomed && <button type="button" className="vpill zoom-pct" title="Show actual pixels (1)" onClick={pz.zoomActual}>{pz.percent}%</button>}
-              {asset.type !== 'VIDEO' && <button type="button" className="vbtn" disabled={!zoomable} aria-label={pz.zoomed ? 'Fit photo' : 'Zoom photo'} title={pz.zoomed ? 'Fit (0)' : 'Zoom (double-click, + / −)'} onClick={pz.toggle}><Icon name={pz.zoomed ? 'zoom-out' : 'zoom-in'} size={18} /></button>}
+              {detail.type !== 'VIDEO' && <button type="button" className="vbtn" disabled={!zoomable} aria-label={pz.zoomed ? 'Fit photo' : 'Zoom photo'} title={pz.zoomed ? 'Fit (0)' : 'Zoom (double-click, + / −)'} onClick={pz.toggle}><Icon name={pz.zoomed ? 'zoom-out' : 'zoom-in'} size={18} /></button>}
               <button type="button" className="vbtn" aria-label="Full screen" title="Full screen" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else ref.current?.requestFullscreen().catch(() => {}) }}><Icon name="fullscreen" size={18} /></button>
             </div>
           )}

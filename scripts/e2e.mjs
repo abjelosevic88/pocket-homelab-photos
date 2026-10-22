@@ -78,6 +78,49 @@ const sourceFiles = [
 ]
 const documents = photos.filter(p => !p.video).slice(0, 2).map((p, i) => ({ id: 41 + i, title: ['Grandma’s garden, 1987', 'Wedding day, 1992'][i], original_name: `scan-00${41 + i}.jpg`, file: p.file, mime: 'image/jpeg', size: 940_000 + i * 270_000, created: ['1987-06-14', '1992-09-05'][i] }))
 
+// ---------- clouds: a Nextcloud (through Pocket Core) and a Google Drive, indexed in place ----------
+const PLACES = [
+  ['Vienna', 'Austria', 48.2082, 16.3738], ['Budapest', 'Hungary', 47.4979, 19.0402], ['Ljubljana', 'Slovenia', 46.0569, 14.5058],
+  ['Dubrovnik', 'Croatia', 42.6507, 18.0944], ['Mostar', 'Bosnia and Herzegovina', 43.3438, 17.8078], ['Rome', 'Italy', 41.9028, 12.4964],
+  ['Prague', 'Czechia', 50.0755, 14.4378], ['Athens', 'Greece', 37.9838, 23.7275],
+]
+const OTHER_CLOUD = 9 // someone else's account: always 404
+const ago = h => new Date(Date.now() - h * 36e5).toISOString()
+let cloudAccounts = [
+  { id: 1, kind: 'nextcloud', name: 'Nextcloud', root: '/Photos', via: 'core', login: 'ana', status: 'idle', last_scan_at: ago(2), created_at: ago(400) },
+  { id: 2, kind: 'gdrive', name: 'Ana’s Drive', root: '', via: '', login: 'ana@example.com', status: 'idle', last_scan_at: ago(5), created_at: ago(300) },
+]
+const stills = photos.filter(p => !p.video)
+let cloudItems = [
+  ...stills.slice(0, 14).map((p, i) => ({ account_id: 1, p, i, folder: '/Photos/Archive' })),
+  ...stills.slice(14, 22).map((p, i) => ({ account_id: 2, p, i: i + 14, folder: '/Camera uploads' })),
+].map(({ account_id, p, i, folder }) => {
+  const place = i % 4 === 3 ? null : PLACES[i % PLACES.length]
+  const taken = new Date(Date.parse(p.takenAt) - (account_id === 1 ? 2 : 1) * 365 * 864e5).toISOString()
+  return {
+    id: 501 + i, account_id, file: p.file, name: `IMG_${2200 + i * 3}.JPG`, path: `${folder}/${taken.slice(0, 4)}/IMG_${2200 + i * 3}.JPG`, mime: 'image/jpeg',
+    size: 3_100_000 + i * 97_000, taken_at: i % 7 === 6 ? undefined : taken, modified_at: taken, width: p.width * 4, height: p.height * 4,
+    ...(place ? { lat: place[2] + (i % 3) * 0.004, lon: place[3] - (i % 2) * 0.003, city: place[0], country: place[1] } : {}),
+    camera: CAMERAS[i % CAMERAS.length].make + ' ' + CAMERAS[i % CAMERAS.length].model, video: false,
+    import_status: account_id === 1 && [2, 5, 9].includes(i) ? 'imported' : '', imported_asset_id: account_id === 1 && [2, 5, 9].includes(i) ? uuid('e', 9) : undefined,
+    has_thumb: true, ...(account_id === 2 ? { web_url: 'https://drive.google.com/file/d/fixture' + i + '/view' } : {}),
+  }
+})
+const cloudPublic = i => { const { file, ...rest } = i; return rest }
+const cloudDto = a => {
+  const list = cloudItems.filter(i => i.account_id === a.id)
+  return { ...a, counts: { items: list.length, photos: list.filter(i => !i.video).length, videos: list.filter(i => i.video).length, located: list.filter(i => i.lat != null).length, imported: list.filter(i => i.import_status).length } }
+}
+let cloudPolls = 0
+const CLOUD_PROVIDERS = [
+  { kind: 'nextcloud', name: 'Nextcloud', auth: 'core', configured: true, fields: [{ key: 'url', label: 'Nextcloud address', placeholder: 'https://cloud.example.com' }, { key: 'username', label: 'User name' }, { key: 'password', label: 'App password', secret: true, help: 'Nextcloud → Settings → Security → Devices & sessions' }] },
+  { kind: 'webdav', name: 'WebDAV', auth: 'form', configured: true, fields: [{ key: 'url', label: 'Address', placeholder: 'https://dav.example.com/photos' }, { key: 'username', label: 'User name' }, { key: 'password', label: 'Password', secret: true }] },
+  { kind: 's3', name: 'S3 bucket', auth: 'form', configured: true, fields: [{ key: 'endpoint', label: 'Endpoint', placeholder: 'https://s3.eu-central-003.backblazeb2.com' }, { key: 'region', label: 'Region', optional: true }, { key: 'bucket', label: 'Bucket' }, { key: 'access_key', label: 'Access key' }, { key: 'secret_key', label: 'Secret key', secret: true }] },
+  { kind: 'gdrive', name: 'Google Drive', auth: 'oauth', configured: true, fields: [] },
+  { kind: 'onedrive', name: 'OneDrive', auth: 'oauth', configured: false, fields: [], help: 'Not set up on this box yet: an admin sets MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET.' },
+  { kind: 'dropbox', name: 'Dropbox', auth: 'oauth', configured: false, fields: [], help: 'Not set up on this box yet: an admin sets DROPBOX_APP_KEY and DROPBOX_APP_SECRET.' },
+]
+
 const calls = []
 const errors = []
 
@@ -110,9 +153,22 @@ async function handle(route) {
 
   // Immich
   if (p === '/immich/assets/statistics') { const live = assets.filter(a => !a.isTrashed && a.visibility === 'timeline'); return json({ images: live.filter(a => a.type === 'IMAGE').length, videos: live.filter(a => a.type === 'VIDEO').length, total: live.length }) }
+  if (p === '/immich/timeline/buckets') {
+    const buckets = new Map()
+    for (const a of assets.filter(a => !a.isTrashed && a.visibility === 'timeline')) {
+      const timeBucket = a.localDateTime.slice(0, 7) + '-01T00:00:00.000Z'
+      buckets.set(timeBucket, (buckets.get(timeBucket) || 0) + 1)
+    }
+    return json([...buckets].map(([timeBucket, count]) => ({ timeBucket, count })).sort((a, b) => b.timeBucket.localeCompare(a.timeBucket)))
+  }
   if (p === '/immich/search/metadata' || p === '/immich/search/smart') {
+    // Immich rejects legacy page pagination when structured filters are present.
+    if (p === '/immich/search/smart' && body?.filter && 'page' in body) return json({ message: 'Deprecated field page cannot be combined with filter' }, 400)
     const f = body?.filter || {}
     let items = assets.filter(a => (f.trashedAt && 'ne' in f.trashedAt ? a.isTrashed : !a.isTrashed))
+    if (f.takenAt?.lt) items = items.filter(a => a.fileCreatedAt < f.takenAt.lt)
+    if (f.takenAt?.gte) items = items.filter(a => a.fileCreatedAt >= f.takenAt.gte)
+    if (f.takenAt?.lte) items = items.filter(a => a.fileCreatedAt <= f.takenAt.lte)
     if (f.visibility) items = items.filter(a => a.visibility === f.visibility.eq)
     if (f.isFavorite) items = items.filter(a => a.isFavorite === f.isFavorite.eq)
     if (f.type) items = items.filter(a => a.type === f.type.eq)
@@ -185,6 +241,59 @@ async function handle(route) {
   }
   if ((m = /^\/immich\/shared-links\/([\w-]+)$/.exec(p))) { shares = shares.filter(s => s.id !== m[1]); return route.fulfill({ status: 204 }) }
 
+  // clouds (docs/clouds.md)
+  if ((m = /^\/clouds\/items\/(\d+)\/(thumb|preview|original)$/.exec(p))) { const i = cloudItems.find(x => x.id === +m[1]); return i ? image('photos/' + i.file) : none() }
+  if (p === '/clouds/providers') return json(CLOUD_PROVIDERS)
+  if (p === '/clouds' && method === 'GET') {
+    // a scan finishes after a couple of polls
+    for (const a of cloudAccounts) if (a.status === 'scanning' && ++cloudPolls > 2) { a.status = 'idle'; a.scan = undefined; a.last_scan_at = new Date().toISOString(); cloudPolls = 0 }
+    return json(cloudAccounts.map(cloudDto))
+  }
+  if (p === '/clouds' && method === 'POST') {
+    if (body.via === 'core') return json({ error: 'Pocket Core has no Nextcloud login for you yet — add it in Core, or connect directly' }, 400)
+    const a = { id: 10 + cloudAccounts.length, kind: body.kind, name: body.name, root: body.root || '', via: '', login: body.fields?.username || '', status: 'scanning', scan: { seen: 0, indexed: 0 }, created_at: new Date().toISOString() }
+    cloudAccounts.push(a)
+    return json(cloudDto(a), 201)
+  }
+  if ((m = /^\/clouds\/oauth\/(\w+)\/start$/.exec(p))) return json({ url: base + '/settings?tab=sources&cloud=2' }) // where the callback sends the browser back
+  if ((m = /^\/clouds\/(\d+)(\/scan)?$/.exec(p))) {
+    const a = cloudAccounts.find(x => x.id === +m[1])
+    if (!a) return json({ error: 'not found' }, 404)
+    if (m[2]) { a.status = 'scanning'; a.scan = { seen: 1200, indexed: 860 }; cloudPolls = 0; return json(cloudDto(a), 202) }
+    if (method === 'DELETE') { cloudAccounts = cloudAccounts.filter(x => x !== a); cloudItems = cloudItems.filter(i => i.account_id !== a.id); return route.fulfill({ status: 204 }) }
+    if (method === 'PUT') Object.assign(a, { name: body.name ?? a.name, root: body.root ?? a.root })
+    return json(cloudDto(a))
+  }
+  if (p === '/clouds/items') {
+    const q = u.searchParams, acc = Number(q.get('account') || 0)
+    if (acc && !cloudAccounts.some(a => a.id === acc)) return json({ error: 'not found' }, 404)
+    let list = cloudItems.filter(i => !acc || i.account_id === acc)
+    const f = q.get('filter') || 'all'
+    if (f === 'new') list = list.filter(i => !i.import_status)
+    if (f === 'imported') list = list.filter(i => i.import_status)
+    if (f === 'located') list = list.filter(i => i.lat != null)
+    if (f === 'unlocated') list = list.filter(i => i.lat == null)
+    if (q.get('type') === 'video') list = list.filter(i => i.video)
+    if (q.get('type') === 'image') list = list.filter(i => !i.video)
+    const s = (q.get('q') || '').toLowerCase()
+    if (s) list = list.filter(i => `${i.name} ${i.path} ${i.city || ''} ${i.country || ''}`.toLowerCase().includes(s))
+    list = list.slice().sort((a, b) => (b.taken_at || b.modified_at).localeCompare(a.taken_at || a.modified_at))
+    const from = Number(q.get('cursor') || 0), size = Math.min(Number(q.get('limit') || 100), 6) // the fixture server pages by 6
+    return json({ items: list.slice(from, from + size).map(cloudPublic), next_cursor: from + size < list.length ? String(from + size) : null, total: list.length })
+  }
+  if ((m = /^\/clouds\/items\/(\d+)\/import$/.exec(p))) {
+    const i = cloudItems.find(x => x.id === +m[1])
+    if (!i) return none()
+    const status = i.import_status ? 'duplicate' : 'imported'
+    i.import_status = status; i.imported_asset_id = uuid('e', 3)
+    return json({ status, asset_id: i.imported_asset_id })
+  }
+  if ((m = /^\/clouds\/items\/(\d+)$/.exec(p))) { const i = cloudItems.find(x => x.id === +m[1]); return i ? json(cloudPublic(i)) : none() }
+  if (p === '/clouds/map') {
+    const acc = Number(u.searchParams.get('account') || 0)
+    return json(cloudItems.filter(i => i.lat != null && (!acc || i.account_id === acc)).map(i => ({ id: i.id, lat: i.lat, lon: i.lon, account_id: i.account_id, city: i.city, country: i.country })))
+  }
+
   // Pocket Files and Pocket Documents, through Core
   if (p === '/sources/files/spaces') return json([{ id: 'home', name: 'My files' }, { id: 'mount:media', name: 'Family media' }])
   if (p === '/sources/files/fs/list' || p === '/sources/files/fs/search') return json({ entries: (u.searchParams.get('path') || '/') === '/' ? sourceFiles.map(({ file, ...f }) => f) : [] })
@@ -229,6 +338,60 @@ try {
   assert.equal(await page.locator('.sb-version').innerText(), 'v' + version)
   assert.equal(await page.locator('.topbar [aria-label="Settings"]').count(), 0, 'no settings gear in the top bar')
   await shot(page, 'library.png')
+  // The timeline covers the full library and jumps directly to old dates.
+  await page.locator('.timeline-year-jump').first().waitFor()
+  const railLayout = await page.evaluate(() => {
+    const rail = document.querySelector('.photo-timeline').getBoundingClientRect()
+    return { right: rail.right, bottom: rail.bottom, width: innerWidth, height: innerHeight,
+      nested: !!document.querySelector('.content .photo-timeline'),
+      photosScrollbar: getComputedStyle(document.querySelector('.content')).scrollbarWidth,
+      datesScrollbar: getComputedStyle(document.querySelector('.timeline-years')).scrollbarWidth }
+  })
+  assert.equal(railLayout.nested, false, 'timeline sits outside the photo scroller')
+  assert.equal(railLayout.right, railLayout.width, 'timeline is flush with the right edge')
+  assert.equal(railLayout.bottom, railLayout.height, 'timeline fills the available height')
+  assert.equal(railLayout.photosScrollbar, 'none')
+  assert.equal(railLayout.datesScrollbar, 'none')
+
+  const years = [...new Set(assets.map(a => a.localDateTime.slice(0, 4)))].sort().reverse()
+  assert.equal(await page.locator('.timeline-year-jump').count(), years.length)
+  const oldYear = years.at(-1)
+  // A slow date request must not unmount the grid, collapse the page or move the rail.
+  let releaseDate, dateStarted
+  const blockedDate = new Promise(resolve => { releaseDate = resolve })
+  const dateRequest = new Promise(resolve => { dateStarted = resolve })
+  const holdDate = async route => {
+    if (route.request().postDataJSON()?.filter?.takenAt) { dateStarted(); await blockedDate }
+    await route.fallback()
+  }
+  await page.route('**/immich/search/metadata', holdDate)
+  await page.locator('.content').evaluate(el => { el.scrollTop = 260 })
+  await page.waitForTimeout(100)
+  const beforeDate = await page.evaluate(() => {
+    window.keptPhotoGrid = document.querySelector('.photo-groups')
+    return { scroll: document.querySelector('.content').scrollTop, rail: document.querySelector('.photo-timeline').getBoundingClientRect().top }
+  })
+  await page.getByRole('button', { name: new RegExp(`^Jump to ${oldYear},`) }).click()
+  await dateRequest
+  await page.waitForTimeout(150)
+  assert.equal(await page.locator('.tile').count(), photos.length, 'keep current photos visible while dates load')
+  assert.equal(await page.evaluate(() => window.keptPhotoGrid === document.querySelector('.photo-groups')), true, 'keep the existing grid mounted')
+  assert.equal(await page.locator('.gallery-results').getAttribute('aria-busy'), 'true')
+  const duringDate = await page.evaluate(() => ({ scroll: document.querySelector('.content').scrollTop, rail: document.querySelector('.photo-timeline').getBoundingClientRect().top }))
+  assert.ok(Math.abs(duringDate.scroll - beforeDate.scroll) < 2, 'defer scrolling until the replacement is ready')
+  assert.ok(Math.abs(duringDate.rail - beforeDate.rail) < 2, 'timeline does not jump during loading')
+  releaseDate()
+
+  await page.waitForURL(u => u.searchParams.get('date') === oldYear)
+  await page.waitForFunction(year => [...document.querySelectorAll('[data-photo-month]')].length > 0 && [...document.querySelectorAll('[data-photo-month]')].every(el => el.dataset.photoMonth.slice(0, 4) <= year), oldYear)
+  await page.unroute('**/immich/search/metadata', holdDate)
+  assert.equal(await page.locator('.content').evaluate(el => el.scrollTop), 0)
+  await page.locator(`#timeline-${oldYear} .timeline-month`).first().click()
+  await page.waitForURL(u => /^\d{4}-\d{2}$/.test(u.searchParams.get('date') || ''))
+  await page.getByRole('button', { name: 'Latest', exact: true }).click()
+  await page.waitForURL(u => !u.searchParams.has('date'))
+  await page.waitForFunction(n => document.querySelectorAll('.tile').length === n, photos.length)
+
   await page.goto(base + '/albums')
   await page.locator('.card-tile').first().waitFor()
   await shot(page, 'albums.png')
@@ -359,6 +522,7 @@ try {
   await searched
   await page.locator('.tile').first().waitFor()
   assert.ok(calls.some(c => c.p === '/immich/search/smart' && c.body.query === 'beach'))
+  assert.ok(calls.filter(c => c.p === '/immich/search/smart').every(c => !('page' in c.body)), 'smart search uses structured filters without deprecated pagination')
 
   // albums, people, memories, places, sharing
   await page.goto(base + '/albums')
@@ -376,9 +540,44 @@ try {
   if (memoryAssets.length) { await page.locator('.memory').first().waitFor(); await shot(page, 'memories.png') }
   await page.goto(base + '/places')
   await page.locator('.map-pin').first().waitFor()
+  // the library's own places first; the clouds' photos come back on below
+  const cloudChip = page.getByRole('button', { name: 'Clouds', exact: true })
+  await cloudChip.waitFor()
+  if ((await cloudChip.getAttribute('aria-pressed')) === 'true') await cloudChip.click()
+  await page.waitForFunction(() => !document.querySelector('.map-pin.cloud'))
+  const map = page.locator('.photo-map')
+  const fitted = await map.getAttribute('viewBox')
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click()
+  assert.ok(Number((await map.getAttribute('viewBox')).split(' ')[2]) < Number(fitted.split(' ')[2]))
+  await page.getByRole('button', { name: 'Fit photos', exact: true }).click()
+  assert.equal(await map.getAttribute('viewBox'), fitted)
+  const rect = await map.boundingBox()
+  await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2)
+  await page.mouse.wheel(0, -250)
+  await page.waitForTimeout(150)
+  assert.notEqual(await map.getAttribute('viewBox'), fitted)
+  const beforePan = await map.getAttribute('viewBox')
+  await page.mouse.down()
+  await page.mouse.move(rect.x + rect.width / 2 + 70, rect.y + rect.height / 2 + 30, { steps: 8 })
+  await page.mouse.up()
+  assert.notEqual(await map.getAttribute('viewBox'), beforePan)
+  await page.getByRole('button', { name: 'Fit photos', exact: true }).click()
+  const totalOnMap = await page.locator('.map-count').evaluateAll(nodes => nodes.reduce((sum, n) => sum + Number(n.textContent.replaceAll(',', '')), 0))
+  assert.equal(totalOnMap, assets.filter(a => !a.isTrashed && a.exifInfo.latitude != null).length)
   await page.locator('.map-pin').first().press('Enter')
   await page.locator('.place-pick').waitFor()
   await shot(page, 'places.png')
+  await page.getByRole('button', { name: 'View photos', exact: true }).click()
+  await page.locator('.viewer').waitFor()
+  await btn('Close viewer').click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(base + '/')
+  await page.getByRole('button', { name: 'Timeline', exact: true }).click()
+  await page.locator('.photo-timeline.mobile-open').waitFor()
+  await page.getByRole('button', { name: 'Close timeline', exact: true }).click()
+  assert.equal(await page.locator('.photo-timeline').isVisible(), false)
+  await page.setViewportSize({ width: 1440, height: 960 })
+
   await page.goto(base + '/sharing')
   await page.locator('.share-row').first().waitFor()
   assert.equal(await page.locator('.share-row').count(), shares.length)
@@ -398,6 +597,117 @@ try {
   await btn('Import to library').click()
   await page.locator('.import-bar').waitFor({ state: 'detached' })
   assert.ok(calls.some(c => c.p === '/sources/documents/import' && c.body.id === documents[0].id))
+
+  // clouds: cards next to the apps, a review page with filters and endless scroll, import, the lightbox, the map
+  const ncItems = cloudItems.filter(i => i.account_id === 1)
+  assert.ok(await page.getByRole('tab', { name: /Ana’s Drive/ }).isVisible(), 'cloud accounts sit next to the apps')
+  assert.ok(await page.getByRole('button', { name: /Add a cloud/ }).isVisible())
+  assert.ok(await page.locator('.sidebar .cal-name').filter({ hasText: 'Ana’s Drive' }).isVisible(), 'clouds are listed in the sidebar')
+  const pages0 = calls.filter(c => c.p === '/clouds/items').length
+  await page.getByRole('tab', { name: /^Nextcloud/ }).click()
+  await page.waitForURL(/\/sources\/cloud\/1$/)
+  await page.waitForFunction(n => document.querySelectorAll('.cloud-tile').length === n, ncItems.length)
+  assert.ok(calls.filter(c => c.p === '/clouds/items').length - pages0 >= 3, 'endless scroll fetched the following pages')
+  assert.equal(await page.locator('.cloud-tile.in-library').count(), ncItems.filter(i => i.import_status).length)
+  assert.equal(await page.locator('.cloud-tile .tile-pin').count(), ncItems.filter(i => i.lat != null).length)
+  for (const x of await page.locator('.toast-x').all()) await x.click().catch(() => {})
+  await page.waitForFunction(() => !document.querySelector('.toasts .toast-x'))
+  await page.mouse.move(5, 300) // no hover state on a tile
+  await shot(page, 'clouds.png')
+  const filtered = page.waitForRequest(r => r.url().includes('/clouds/items') && new URL(r.url()).searchParams.get('filter') === 'new')
+  await page.getByRole('radio', { name: 'Not in library', exact: true }).click()
+  await filtered
+  await page.waitForFunction(n => document.querySelectorAll('.cloud-tile').length === n, ncItems.filter(i => !i.import_status).length)
+  assert.equal(await page.locator('.cloud-tile.in-library').count(), 0)
+  await page.getByRole('radio', { name: 'With location', exact: true }).click()
+  await page.waitForFunction(n => document.querySelectorAll('.cloud-tile').length === n, ncItems.filter(i => i.lat != null).length)
+  await page.getByRole('radio', { name: 'All', exact: true }).click()
+  await page.waitForFunction(n => document.querySelectorAll('.cloud-tile').length === n, ncItems.length)
+  // select two that are not in the library yet and import them
+  const fresh = page.locator('.cloud-tile:not(.in-library) .tile-check')
+  await fresh.nth(0).click(); await fresh.nth(1).click()
+  const imports0 = calls.filter(c => /^\/clouds\/items\/\d+\/import$/.test(c.p)).length
+  await btn('Import to library').click()
+  await page.locator('.import-row').nth(1).waitFor()
+  await page.locator('.import-bar').waitFor({ state: 'detached' })
+  assert.equal(calls.filter(c => /^\/clouds\/items\/\d+\/import$/.test(c.p)).length - imports0, 2)
+  await page.waitForFunction(n => document.querySelectorAll('.cloud-tile.in-library').length === n, ncItems.filter(i => i.import_status).length)
+  // the lightbox names the place
+  const located = ncItems.find(i => i.lat != null && i.taken_at)
+  await page.getByRole('button', { name: `Open ${located.name}`, exact: true }).click()
+  await page.locator('.cloud-viewer').waitFor()
+  if (!(await page.locator('.cloud-viewer .viewer-info').isVisible())) await btn('Show photo information').click()
+  await page.locator('.cloud-viewer .viewer-info').getByText(`${located.city}, ${located.country}`, { exact: true }).waitFor()
+  assert.ok(await page.locator('.cloud-viewer .mini-map').isVisible(), 'a small map shows where it was taken')
+  await page.keyboard.press('ArrowRight')
+  await page.locator('.cloud-viewer .viewer-title small').filter({ hasText: /^.* · 2 of|· \d+ of/ }).first().waitFor()
+  await page.keyboard.press('Escape')
+  await page.locator('.cloud-viewer').waitFor({ state: 'detached' })
+  // the account's own map
+  await page.getByRole('tab', { name: 'Map', exact: true }).click()
+  await page.locator('.map-pin.cloud').first().waitFor()
+  await page.getByRole('tab', { name: 'Photos', exact: true }).click()
+  // rescan: the status follows the polling until the scan is done
+  await btn('Rescan').click()
+  await page.locator('.cloud-scan').waitFor()
+  await page.locator('.cloud-scan').waitFor({ state: 'detached', timeout: 20000 })
+  // phones: the review page fits
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.waitForTimeout(200)
+  assert.equal(await page.locator('.content').evaluate(e => e.scrollWidth > e.clientWidth + 1), false, 'the cloud page overflows at 390px')
+  await page.setViewportSize({ width: 1440, height: 960 })
+  // someone else's cloud is just "not connected"
+  await page.goto(base + `/sources/cloud/${OTHER_CLOUD}`)
+  await page.getByText('This cloud isn’t connected').waitFor()
+
+  // settings: the list, adding WebDAV with a form, Nextcloud through Core (refused → direct form), Google Drive by OAuth
+  await page.goto(base + '/settings/sources')
+  await page.locator('.cloud-row').first().waitFor()
+  assert.equal(await page.locator('.cloud-row').count(), cloudAccounts.length)
+  assert.ok(await page.locator('.cloud-row').filter({ hasText: 'via Pocket Core' }).isVisible())
+  await page.getByRole('button', { name: 'Add a cloud', exact: true }).click()
+  await page.locator('.provider').first().waitFor()
+  assert.equal(await page.locator('.provider').count(), CLOUD_PROVIDERS.length)
+  assert.equal(await page.locator('.provider:disabled').count(), CLOUD_PROVIDERS.filter(x => !x.configured).length, 'unconfigured providers are shown, not offered')
+  await page.locator('.provider').filter({ hasText: 'WebDAV' }).click()
+  await page.getByLabel('Name', { exact: true }).fill('Family NAS')
+  await page.getByLabel('Address', { exact: true }).fill('https://nas.example.com/dav/photos')
+  await page.getByLabel('User name', { exact: true }).fill('ana')
+  await page.getByLabel('Password', { exact: true }).fill('test-only-password')
+  await page.getByLabel('Folder (optional)').fill('/Phone')
+  const created = page.waitForRequest(r => r.method() === 'POST' && new URL(r.url()).pathname === '/api/v1/clouds')
+  await btn('Connect').click()
+  const sent = (await created).postDataJSON()
+  assert.deepEqual(sent, { kind: 'webdav', name: 'Family NAS', root: '/Phone', fields: { url: 'https://nas.example.com/dav/photos', username: 'ana', password: 'test-only-password' } })
+  await page.locator('.cloud-row').filter({ hasText: 'Family NAS' }).waitFor()
+  await page.getByRole('button', { name: 'Add a cloud', exact: true }).click()
+  await page.locator('.provider').filter({ hasText: 'Nextcloud' }).click()
+  await page.locator('.via-core').waitFor()
+  assert.equal(await page.getByLabel('App password').count(), 0, 'Pocket Core is the default: nothing to type')
+  const viaCore = page.waitForRequest(r => r.method() === 'POST' && new URL(r.url()).pathname === '/api/v1/clouds')
+  await btn('Connect').click()
+  assert.equal((await viaCore).postDataJSON().via, 'core')
+  await page.locator('.add-cloud .callout.danger').filter({ hasText: 'Pocket Core has no Nextcloud login' }).waitFor()
+  await page.locator('.add-cloud .callout.danger').getByRole('button', { name: 'Connect directly instead' }).click()
+  await page.getByLabel('App password').waitFor()
+  await btn('Other clouds').click()
+  await page.locator('.provider').filter({ hasText: 'Google Drive' }).click()
+  await btn('Continue to Google Drive').click()
+  await page.waitForURL(u => u.pathname === '/settings/sources' && !u.searchParams.has('cloud'))
+  await page.locator('.toasts').filter({ hasText: 'Connected' }).waitFor()
+
+  // Places: the clouds' photos come back as hollow markers; a cloud place opens the cloud lightbox
+  await page.goto(base + '/places')
+  await page.locator('.map-pin').first().waitFor()
+  await page.getByRole('button', { name: 'Clouds', exact: true }).click()
+  await page.locator('.map-pin.cloud').first().waitFor()
+  await page.getByRole('button', { name: 'Fit photos', exact: true }).click()
+  await page.locator('.map-pin.cloud').first().press('Enter')
+  await page.locator('.place-strip button.cloud').first().waitFor()
+  await shot(page, 'clouds-map.png')
+  await page.locator('.place-strip button.cloud').first().click()
+  await page.locator('.cloud-viewer').waitFor()
+  await btn('Close viewer').click()
 
   // upload through the New menu's file input
   await page.goto(base + '/')
@@ -442,7 +752,7 @@ try {
   await shot(page, 'library-dark.png')
 
   assert.deepEqual(errors, [])
-  console.log(`PASS: ${photos.length}-photo library, viewer details/description/favorite/navigation, portrait fit, zoom to the pointer + pan + keys + ctrl-wheel, add to album, protected sharing link, palette search, albums/people/memories/places/sharing, Files + Documents imports, upload tray, theme from Settings, five widths with the phone drawer.`)
+  console.log(`PASS: ${photos.length}-photo library, viewer details/description/favorite/navigation, portrait fit, zoom to the pointer + pan + keys + ctrl-wheel, add to album, protected sharing link, palette search, albums/people/memories/places/sharing, map zoom/pan/counts/viewer, timeline year/month jumps and mobile toggle, Files + Documents imports, clouds (cards, filters + endless scroll, import, lightbox place, account map, rescan polling, add WebDAV / Nextcloud via Core / Drive OAuth, someone else's 404, Places markers), upload tray, theme from Settings, five widths with the phone drawer.`)
 } finally {
   await context.close()
   if (!process.env.CDP) await browser.close()

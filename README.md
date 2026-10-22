@@ -37,6 +37,14 @@ originals.
     <td align="center"><sub>People Immich recognised, named in place.</sub></td>
     <td align="center"><sub>On this day, a year ago.</sub></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/clouds.png" alt="A connected Nextcloud: its photos by month, with what is already in the library and what has a place"></td>
+    <td width="50%"><img src="docs/screenshots/clouds-map.png" alt="Places with the photos from connected clouds next to the library"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Your Nextcloud, Drive or Dropbox photos, reviewed in place.</sub></td>
+    <td align="center"><sub>Cloud photos on the same map as your library.</sub></td>
+  </tr>
 </table>
 
 <p align="center">
@@ -72,6 +80,17 @@ All screenshots use the fixture library — real photographs from Unsplash, made
   them and import the ones you pick. The source files stay where they are; Immich spots duplicates.
 - Phone camera backup stays with the Immich mobile app, against the same server.
 
+**Clouds — review in place, import what you pick** ([details](docs/clouds.md))
+- Connect Nextcloud (through Pocket Core, or directly with an app password), any WebDAV server, an S3 bucket
+  (Backblaze B2, Wasabi, MinIO…), Google Drive, OneDrive or Dropbox. Each person connects their own; nobody
+  else sees them.
+- Photos finds every photo and video there and reads its date, camera and GPS position — from the cloud's
+  own metadata, or from the file with a few small range requests, never by copying the library — and keeps
+  a thumbnail. Place names come from your Immich, nothing leaves the box.
+- Browse each cloud by month, filter to what is not in your library yet or has no location, open photos
+  full size, see them on the Places map next to your Immich photos, and import the ones you want.
+  The clouds are only ever read. New photos are picked up every few hours.
+
 **With the other Pocket apps** (through [Pocket Core](https://github.com/abjelosevic88/pocket-homelab-core))
 - Sign in with Pocket Core, and use the Immich credentials Core already keeps for you.
 - Uses only `files:read` and `documents:read`; Core decides per person, and the source app checks folder,
@@ -92,7 +111,9 @@ under **Settings → Your photo library**. See [docker-compose.yml](docker-compo
 `SECURE_COOKIES=true`. `IMMICH_PUBLIC_URL` is where sharing links open, so recipients need to reach it.
 
 On a Pocket Box, set `CORE_URL` and `CORE_REGISTRATION_KEY`: the app registers itself, people sign in with
-Pocket Core, and Pocket Files and Pocket Documents appear under *Sources* with nothing to configure.
+Pocket Core, and Pocket Files and Pocket Documents appear under *Sources* with nothing to configure — and so
+does each person's Nextcloud. Google Drive, OneDrive and Dropbox need your own OAuth client registration
+(`GOOGLE_*`, `MICROSOFT_*`, `DROPBOX_*`; the steps are in [Clouds](docs/clouds.md) and in the app).
 
 Immich 3.3 is the tested API target (structured search filters and the non-destructive edits API). Immich
 remains the system of record for originals, albums, faces, sharing and trash — back it up on its own.

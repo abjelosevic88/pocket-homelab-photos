@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api, immich, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
+import { cloudKind } from '../lib/clouds'
 import { LIBRARY_NAV, MORE_NAV, SECTION_TITLE } from '../lib/nav'
 import type { Album } from '../lib/types'
 import { ACCEPT, useUploads } from '../lib/uploads'
@@ -16,7 +17,7 @@ import { AskButton } from './AskButton'
 
 const SIDEBAR_KEY = 'pp-sidebar'
 
-export type NewKind = 'upload' | 'album' | 'files' | 'documents'
+export type NewKind = 'upload' | 'album' | 'files' | 'documents' | 'cloud'
 
 /** The New menu: the same everywhere (sidebar button, phone button). */
 export function newItems(run: (k: NewKind) => void, connected: boolean): MenuItem[] {
@@ -27,6 +28,7 @@ export function newItems(run: (k: NewKind) => void, connected: boolean): MenuIte
     { heading: 'Import from your apps' },
     { label: 'From Pocket Files', icon: 'folder', onSelect: () => run('files') },
     { label: 'From Pocket Documents', icon: 'file', onSelect: () => run('documents') },
+    { label: 'Add a cloud…', icon: 'cloud-plus', onSelect: () => run('cloud') },
   ]
 }
 
@@ -38,7 +40,7 @@ export function usePageTitle(t: React.ReactNode | null, deps: unknown[]) {
 }
 
 export default function Layout() {
-  const { connection, bump } = useApp()
+  const { connection, bump, clouds } = useApp()
   const { add } = useUploads()
   const { toast } = useToast()
   const navigate = useNavigate()
@@ -66,6 +68,7 @@ export default function Layout() {
     closeDrawer()
     if (k === 'upload') fileInput.current?.click()
     else if (k === 'album') setNewAlbum(true)
+    else if (k === 'cloud') navigate('/settings/sources?add=1')
     else navigate(`/sources/${k}`)
   }
   const runRef = useRef(run)
@@ -105,6 +108,8 @@ export default function Layout() {
     ...[...LIBRARY_NAV, ...MORE_NAV].map(n => ({ id: n.to, label: n.label, icon: n.icon, hint: n.key?.toUpperCase(), run: () => navigate(n.to) })),
     { id: 'files', label: 'Import from Pocket Files', icon: 'folder', keywords: 'sources import', run: () => navigate('/sources/files') },
     { id: 'documents', label: 'Import from Pocket Documents', icon: 'file', keywords: 'sources import', run: () => navigate('/sources/documents') },
+    ...(clouds || []).map(c => ({ id: 'cloud-' + c.id, label: `Photos in ${c.name}`, icon: cloudKind(c.kind).icon, keywords: 'cloud sources review ' + cloudKind(c.kind).label, run: () => navigate(`/sources/cloud/${c.id}`) })),
+    { id: 'add-cloud', label: 'Add a cloud', icon: 'cloud-plus', keywords: 'nextcloud webdav s3 google drive onedrive dropbox connect', run: () => run('cloud') },
     { id: 'settings', label: 'Settings', icon: 'settings', hint: ',', run: () => navigate('/settings') },
     { id: 'library', label: 'Your Immich connection', icon: 'link', keywords: 'connect api key', run: () => navigate('/settings/library') },
     { id: 'shortcuts', label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', run: () => setShortcuts(true) },
@@ -130,11 +135,14 @@ export default function Layout() {
         </div>
         <div className="main">
           <TopBar title={title} onMenu={toggleSidebar} onPalette={() => setPalette(true)} mobile={mobile} compact={narrow} sidebarOpen={sidebarOpen} />
+          <div className="content-region">
           <main className="content">
             <div className="content-inner">
               <ErrorBoundary key={loc.pathname.split('/')[1] || 'library'} where={loc.pathname}><Outlet /></ErrorBoundary>
             </div>
           </main>
+          <div id="timeline-dock" className="timeline-dock" />
+          </div>
         </div>
         {dragging && connected && <div className="drop-hint" aria-hidden="true"><Icon name="upload" size={28} /><b>Drop to upload to your library</b></div>}
         {mobile && <button type="button" className="fab" aria-label="New" title="New" aria-haspopup="menu" aria-expanded={!!fabMenu} onClick={e => setFabMenu(fabMenu ? null : rectOf(e.currentTarget))}><Icon name="plus" size={26} strokeWidth={2.2} /></button>}

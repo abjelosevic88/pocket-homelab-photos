@@ -50,6 +50,17 @@ type Config struct {
 
 	ImmichURL       string
 	ImmichPublicURL string
+
+	// Clouds people can index (docs/clouds.md). The OAuth clouds need the box owner's own client
+	// registration; the redirect URI is BASE_URL/api/v1/clouds/oauth/<kind>/callback.
+	GoogleClientID        string
+	GoogleClientSecret    string
+	MicrosoftClientID     string
+	MicrosoftClientSecret string
+	MicrosoftTenant       string
+	DropboxAppKey         string
+	DropboxAppSecret      string
+	CloudScanEvery        time.Duration
 }
 
 func env(key, def string) string {
@@ -123,6 +134,15 @@ func Load() (*Config, error) {
 
 		ImmichURL:       strings.TrimRight(env("IMMICH_URL", ""), "/"),
 		ImmichPublicURL: strings.TrimRight(env("IMMICH_PUBLIC_URL", ""), "/"),
+
+		GoogleClientID:        env("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret:    env("GOOGLE_CLIENT_SECRET", ""),
+		MicrosoftClientID:     env("MICROSOFT_CLIENT_ID", ""),
+		MicrosoftClientSecret: env("MICROSOFT_CLIENT_SECRET", ""),
+		MicrosoftTenant:       env("MICROSOFT_TENANT", "common"),
+		DropboxAppKey:         env("DROPBOX_APP_KEY", ""),
+		DropboxAppSecret:      env("DROPBOX_APP_SECRET", ""),
+		CloudScanEvery:        envDuration("CLOUD_SCAN_INTERVAL", 6*time.Hour),
 	}
 	if c.CoreAppURL == "" {
 		c.CoreAppURL = c.BaseURL

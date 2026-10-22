@@ -1,7 +1,7 @@
 // Photos that live in Pocket Files and Pocket Documents: browse them with the person's
 // own access (through Pocket Core) and copy chosen originals into their Immich.
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { api, isAbort, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import { SOURCES, type SourceId } from '../lib/nav'
@@ -9,6 +9,7 @@ import { bytes, fmtDate, plural } from '../lib/photos'
 import { Icon } from '../components/icons'
 import { usePageTitle } from '../components/Layout'
 import { Select } from '../components/Select'
+import { SourceSwitch } from '../components/SourceSwitch'
 import { Empty, Loading, Modal, PageHeader, Spinner, errMsg, useToast } from '../components/ui'
 
 interface Entry { id?: number; name: string; path: string; is_dir?: boolean; size?: number; mime?: string; modified?: string; title?: string }
@@ -20,7 +21,6 @@ const isMedia = (e: Entry) => !!e.mime?.startsWith('image/') || !!e.mime?.starts
 export default function Sources() {
   const { source: raw } = useParams()
   const source: SourceId = raw === 'documents' ? 'documents' : 'files'
-  const navigate = useNavigate()
   const { connection, bump } = useApp()
   const { toast } = useToast()
   const connected = !!connection?.connected
@@ -106,14 +106,7 @@ export default function Sources() {
     <div className="page sources">
       <PageHeader title={meta.label} sub={source === 'files' ? 'Photos and videos in your home, shared and mounted folders.' : 'Images and scanned photos in your document archive.'}
         actions={<button type="button" className="btn ghost icon-only" aria-label="Refresh source" title="Refresh" disabled={importing} onClick={() => load()}><Icon name="refresh" size={16} /></button>} />
-      <div className="source-switch" role="tablist" aria-label="Source">
-        {SOURCES.map(s => (
-          <button key={s.id} type="button" role="tab" aria-selected={s.id === source} disabled={importing} className={`source-tab ${s.id === source ? 'active' : ''}`} onClick={() => navigate(`/sources/${s.id}`)}>
-            <span className="source-ico"><Icon name={s.icon} size={18} /></span>
-            <span className="grow"><b>{s.label}</b><small>{s.desc}</small></span>
-          </button>
-        ))}
-      </div>
+      <SourceSwitch active={source} disabled={importing} />
       <div className="callout info source-note"><Icon name="shield" size={15} /><span>Photos browses with your own access in Pocket Core. Importing copies the originals you pick into your Immich library — nothing in {meta.label} is changed or moved.</span></div>
 
       <div className="source-tools">

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Icon } from '../components/icons'
 import { ShortcutsSheet } from '../components/ShortcutsSheet'
 import { Tabs, useIsMobile } from '../components/ui'
@@ -10,7 +10,7 @@ type TabId = 'appearance' | 'library' | 'sources' | 'account' | 'about'
 const TABS: { id: TabId; label: string; icon: string; sub: string }[] = [
   { id: 'appearance', label: 'Appearance', icon: 'palette', sub: 'Light or dark, thumbnail size and how photos are grouped.' },
   { id: 'library', label: 'Your photo library', icon: 'images', sub: 'The Immich account your photos, albums and faces live in.' },
-  { id: 'sources', label: 'Sources', icon: 'layers', sub: 'Pocket Files and Pocket Documents, read with your own access.' },
+  { id: 'sources', label: 'Sources', icon: 'layers', sub: 'Your clouds, Pocket Files and Pocket Documents — read only, with your own access.' },
   { id: 'account', label: 'Account', icon: 'user', sub: 'Who you are signed in as.' },
   { id: 'about', label: 'About', icon: 'info', sub: 'Version, the Pocket Core link and where everything is kept.' },
 ]
@@ -22,6 +22,12 @@ export default function Settings() {
   const tab: TabId = TABS.find(t => t.id === raw)?.id || 'appearance'
   const current = TABS.find(t => t.id === tab)!
   const go = (id: TabId) => navigate(`/settings/${id}`, { replace: true })
+  // /settings?tab=sources&cloud=7 (where a cloud's sign-in page sends the browser back) → /settings/sources?cloud=7
+  const [sp] = useSearchParams()
+  useEffect(() => {
+    const t = sp.get('tab')
+    if (!raw && t && TABS.some(x => x.id === t)) { const rest = new URLSearchParams(sp); rest.delete('tab'); navigate(`/settings/${t}${rest.size ? '?' + rest : ''}`, { replace: true }) }
+  }, [raw, sp, navigate])
 
   const [shortcuts, setShortcuts] = useState(false)
   useEffect(() => { document.querySelector('.set-content')?.scrollTo({ top: 0 }) }, [tab])

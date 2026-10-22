@@ -54,7 +54,7 @@ export function PhotoGrid({ assets, grouping, selected, setSelected, selecting, 
                 const on = selected.has(a.id)
                 const w = a.width && a.height ? a.width / a.height : 1
                 return (
-                  <div key={a.id} className={`tile ${on ? 'selected' : ''}`} style={{ ['--ar' as string]: Math.min(2.2, Math.max(0.6, w)) }}>
+                  <div key={a.id} data-photo-month={(a.localDateTime || a.fileCreatedAt).slice(0, 7)} className={`tile ${on ? 'selected' : ''}`} style={{ ['--ar' as string]: Math.min(2.2, Math.max(0.6, w)) }}>
                     <button type="button" className="tile-open" aria-label={`Open ${a.exifInfo?.description || a.originalFileName || 'photo'}`}
                       onClick={e => { if (picking || e.shiftKey) toggle(a, e.shiftKey); else onOpen(index.get(a.id)!) }}>
                       <img src={thumb(a)} loading="lazy" alt="" draggable={false} onError={e => e.currentTarget.classList.add('broken')} />

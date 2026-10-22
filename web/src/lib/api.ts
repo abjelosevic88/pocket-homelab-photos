@@ -1,4 +1,5 @@
-// Minimal fetch wrapper for the JSON API, plus the Immich pass-through.
+// Minimal fetch wrapper for the JSON API, plus the Immich pass-through and the clouds.
+import type { CloudAccount, CloudItem, CloudItemsPage, CloudMarker, CloudProvider } from './types'
 export class ApiError extends Error {
   status: number
   data: Record<string, unknown>
@@ -62,3 +63,26 @@ export const qs = (o: Record<string, string | number | boolean | undefined | nul
 }
 
 export const isAbort = (e: unknown) => (e as Error)?.name === 'AbortError'
+
+// ---------- clouds: Nextcloud, WebDAV, S3, Google Drive, OneDrive, Dropbox (docs/clouds.md) ----------
+
+const CLOUDS = V1 + '/clouds'
+export type CloudFilter = 'all' | 'new' | 'imported' | 'located' | 'unlocated'
+
+export const clouds = {
+  providers: (signal?: AbortSignal) => api.get<CloudProvider[]>(`${CLOUDS}/providers`, signal),
+  list: (signal?: AbortSignal) => api.get<CloudAccount[]>(CLOUDS, signal),
+  create: (body: { kind: string; name: string; root: string; via?: 'core'; fields: Record<string, string> }) => api.post<CloudAccount>(CLOUDS, body),
+  update: (id: number, body: { name?: string; root?: string; fields?: Record<string, string> }) => api.put<CloudAccount>(`${CLOUDS}/${id}`, body),
+  remove: (id: number) => api.del<void>(`${CLOUDS}/${id}`),
+  scan: (id: number) => api.post<CloudAccount>(`${CLOUDS}/${id}/scan`),
+  oauthStart: (kind: string, account?: number) => api.get<{ url: string }>(`${CLOUDS}/oauth/${kind}/start` + qs({ json: 1, account })),
+  items: (p: { account?: number; cursor?: string | null; limit?: number; filter?: CloudFilter; type?: 'image' | 'video' | ''; q?: string; order?: 'desc' | 'asc' }, signal?: AbortSignal) =>
+    api.get<CloudItemsPage>(`${CLOUDS}/items` + qs({ ...p, filter: p.filter === 'all' ? undefined : p.filter }), signal),
+  item: (id: number, signal?: AbortSignal) => api.get<CloudItem>(`${CLOUDS}/items/${id}`, signal),
+  importItem: (id: number) => api.post<{ status: 'imported' | 'duplicate'; asset_id?: string }>(`${CLOUDS}/items/${id}/import`),
+  map: (account?: number, signal?: AbortSignal) => api.get<CloudMarker[]>(`${CLOUDS}/map` + qs({ account }), signal),
+}
+export const cloudThumb = (id: number) => `${CLOUDS}/items/${id}/thumb`
+export const cloudPreview = (id: number) => `${CLOUDS}/items/${id}/preview`
+export const cloudOriginal = (id: number) => `${CLOUDS}/items/${id}/original`

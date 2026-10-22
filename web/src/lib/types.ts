@@ -122,6 +122,71 @@ export interface MapMarker {
   city: string | null
   state?: string | null
   country: string | null
+  /** A photo in a cloud rather than in Immich: its thumbnail, drawn with a hollow ring. */
+  cloud?: boolean
+  src?: string
 }
 
 export interface Stats { images: number; videos: number; total: number }
+
+// ---------- clouds (docs/clouds.md) ----------
+export type CloudKind = 'nextcloud' | 'webdav' | 's3' | 'gdrive' | 'onedrive' | 'dropbox'
+
+export interface CloudField { key: string; label: string; secret?: boolean; placeholder?: string; help?: string; optional?: boolean }
+
+/** GET /clouds/providers: what can be connected on this box, and how. */
+export interface CloudProvider {
+  kind: CloudKind
+  name: string
+  auth: 'form' | 'oauth' | 'core'
+  configured: boolean
+  fields: CloudField[]
+  help?: string
+}
+
+export interface CloudCounts { items: number; photos: number; videos: number; located: number; imported: number }
+
+export interface CloudAccount {
+  id: number
+  kind: CloudKind
+  name: string
+  root: string
+  via?: 'core' | ''
+  login?: string
+  status: 'idle' | 'scanning' | 'error' | 'reconnect'
+  error?: string
+  last_scan_at?: string
+  next_scan_at?: string
+  scan?: { seen: number; indexed: number }
+  counts: CloudCounts
+  created_at: string
+}
+
+export interface CloudItem {
+  id: number
+  account_id: number
+  name: string
+  path: string
+  mime: string
+  size: number
+  taken_at?: string
+  modified_at?: string
+  width?: number
+  height?: number
+  lat?: number
+  lon?: number
+  city?: string
+  country?: string
+  camera?: string
+  video: boolean
+  duration_ms?: number
+  imported_asset_id?: string
+  import_status?: '' | 'imported' | 'duplicate'
+  has_thumb: boolean
+  web_url?: string
+}
+
+export interface CloudItemsPage { items: CloudItem[]; next_cursor?: string | null; total: number }
+
+/** GET /clouds/map: every located item (city/country are optional extras). */
+export interface CloudMarker { id: number; lat: number; lon: number; account_id: number; city?: string; country?: string }

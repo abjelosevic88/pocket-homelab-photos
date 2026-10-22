@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { api, immich, V1 } from './api'
+import { api, clouds as cloudApi, immich, V1 } from './api'
 import type { Grouping } from './photos'
-import type { Album, AuthStatus, Connection, Stats, User } from './types'
+import type { Album, AuthStatus, CloudAccount, Connection, Stats, User } from './types'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type Density = 'comfortable' | 'compact'
@@ -28,6 +28,9 @@ interface AppState {
   checkConnection: () => Promise<void>
   reloadAlbums: () => Promise<void>
   setUser: (u: User | null) => void
+  /** The person's connected clouds; null until loaded (and [] when this server has none). */
+  clouds: CloudAccount[] | null
+  reloadClouds: () => Promise<void>
 }
 
 export const THEME_KEY = 'pp-theme-mode'
@@ -55,6 +58,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [stats, setStats] = useState<Stats | null>(null)
   const [albums, setAlbums] = useState<Album[]>([])
   const [version, setVersion] = useState(0)
+  const [clouds, setClouds] = useState<CloudAccount[] | null>(null)
   const [themeMode, setThemeModeRaw] = useState<ThemeMode>(storedThemeMode)
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [density, setDensityRaw] = useState<Density>(() => localStorage.getItem(DENSITY_KEY) === 'compact' ? 'compact' : 'comfortable')
@@ -101,9 +105,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const bump = useCallback(() => setVersion(v => v + 1), [])
 
+  // Clouds: loaded once signed in, then every 3 seconds while one of them is scanning.
+  const reloadClouds = useCallback(async () => {
+    try { setClouds(await cloudApi.list()) } catch { setClouds(c => c ?? []) }
+  }, [])
+  const signedIn = !!user
+  useEffect(() => { if (signedIn) reloadClouds(); else setClouds(null) }, [signedIn, reloadClouds])
+  const scanning = !!clouds?.some(c => c.status === 'scanning')
+  useEffect(() => {
+    if (!scanning) return
+    const t = setInterval(reloadClouds, 3000)
+    return () => clearInterval(t)
+  }, [scanning, reloadClouds])
+
   const value = useMemo<AppState>(() => ({
     status, user, connection, connectionError, stats, albums, version, bump, themeMode, theme, setThemeMode, density, setDensity,
-    grouping, setGrouping, refresh, checkConnection, reloadAlbums, setUser,
-  }), [status, user, connection, connectionError, stats, albums, version, bump, themeMode, theme, setThemeMode, density, setDensity, grouping, setGrouping, refresh, checkConnection, reloadAlbums])
+    grouping, setGrouping, refresh, checkConnection, reloadAlbums, setUser, clouds, reloadClouds,
+  }), [status, user, connection, connectionError, stats, albums, version, bump, themeMode, theme, setThemeMode, density, setDensity, grouping, setGrouping, refresh, checkConnection, reloadAlbums, clouds, reloadClouds])
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

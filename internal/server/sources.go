@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"io"
@@ -119,34 +120,49 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	if t, e := time.Parse(time.RFC3339, in.Modified); e == nil {
 		when = t
 	}
-	reader, writer := io.Pipe()
-	defer reader.Close()
-	multi := multipart.NewWriter(writer)
-	go func() {
-		part, e := multi.CreateFormFile("assetData", in.Name)
-		if e == nil {
-			var n int64
-			n, e = io.Copy(part, io.LimitReader(res.Body, (20<<30)+1))
-			if e == nil && n > 20<<30 {
-				e = fmt.Errorf("source exceeds 20 GiB")
-			}
-		}
-		if e == nil {
-			e = multi.WriteField("fileCreatedAt", when.Format(time.RFC3339))
-		}
-		if e == nil {
-			e = multi.WriteField("fileModifiedAt", when.Format(time.RFC3339))
-		}
-		if e == nil {
-			e = multi.Close()
-		}
-		_ = writer.CloseWithError(e)
-	}()
-	uploaded, e := s.upstream(r.Context(), c, "POST", "/assets", reader, http.Header{"Content-Type": {multi.FormDataContentType()}})
+	uploaded, e := s.uploadToImmich(r.Context(), c, in.Name, res.Body, when, when)
 	if e != nil {
 		writeErr(w, 502, "import failed; the source file was left unchanged")
 		return
 	}
 	defer uploaded.Body.Close()
 	relay(w, uploaded)
+}
+
+// uploadToImmich streams an original into the person's Immich as a new asset. created is the
+// fallback date for files without one of their own; Immich reads EXIF and spots duplicates.
+func (s *Server) uploadToImmich(ctx context.Context, c *connection, name string, body io.Reader, created, modified time.Time) (*http.Response, error) {
+	if created.IsZero() {
+		created = time.Now().UTC()
+	}
+	if modified.IsZero() {
+		modified = created
+	}
+	reader, writer := io.Pipe()
+	multi := multipart.NewWriter(writer)
+	go func() {
+		part, e := multi.CreateFormFile("assetData", name)
+		if e == nil {
+			var n int64
+			n, e = io.Copy(part, io.LimitReader(body, (20<<30)+1))
+			if e == nil && n > 20<<30 {
+				e = fmt.Errorf("source exceeds 20 GiB")
+			}
+		}
+		if e == nil {
+			e = multi.WriteField("fileCreatedAt", created.UTC().Format(time.RFC3339))
+		}
+		if e == nil {
+			e = multi.WriteField("fileModifiedAt", modified.UTC().Format(time.RFC3339))
+		}
+		if e == nil {
+			e = multi.Close()
+		}
+		_ = writer.CloseWithError(e)
+	}()
+	res, err := s.upstream(ctx, c, "POST", "/assets", reader, http.Header{"Content-Type": {multi.FormDataContentType()}})
+	if err != nil {
+		reader.Close()
+	}
+	return res, err
 }
