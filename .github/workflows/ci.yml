@@ -1,0 +1,41 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json }
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod, cache: true }
+      - name: Verify pinned Core SDK
+        run: cd third_party/pocket-core && sha256sum -c SHA256SUMS
+      - name: Build web
+        run: cd web && npm ci --no-audit --no-fund && npm run build
+      - name: Install browser
+        run: cd web && npx playwright install --with-deps chromium
+      - name: Browser regression suite
+        run: |
+          npm run preview --prefix web -- --host 127.0.0.1 --port 18194 > /tmp/photos-preview.log 2>&1 &
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:18194/ > /dev/null && break; sleep 1; done
+          node scripts/e2e.mjs
+      - name: Vet and test
+        run: |
+          test -z "$(gofmt -l cmd internal web/*.go)"
+          go vet ./...
+          go test -race ./...
+      - name: Build
+        run: CGO_ENABLED=0 go build -trimpath -o pocket-photos ./cmd/pocket-photos
+      - name: Smoke test
+        run: |
+          DATA_DIR=/tmp/pocket-photos-ci PORT=8080 ./pocket-photos &
+          for i in $(seq 1 20); do curl -fsS http://localhost:8080/healthz && break; sleep 1; done
+          curl -fsS http://localhost:8080/readyz
+          curl -fsS http://localhost:8080/ | grep -q 'Pocket Photos'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/immich/assets/statistics)" = 401

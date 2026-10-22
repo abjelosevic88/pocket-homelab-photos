@@ -1,0 +1,20 @@
+services:
+  pocket-photos:
+    image: ghcr.io/abjelosevic88/pocket-homelab-photos:latest
+    container_name: pocket-photos
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      TZ: ${TZ:-UTC}
+      BASE_URL: ${BASE_URL:-}
+      IMMICH_URL: ${IMMICH_URL:-http://immich-server:2283}
+      IMMICH_PUBLIC_URL: ${IMMICH_PUBLIC_URL:-}
+      SECURE_COOKIES: ${SECURE_COOKIES:-false}
+      CORE_URL: ${CORE_URL:-}
+      CORE_REGISTRATION_KEY: ${CORE_REGISTRATION_KEY:-}
+      CORE_APP_URL: ${CORE_APP_URL:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    volumes:
+      - ./data:/data
