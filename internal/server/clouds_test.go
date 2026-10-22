@@ -428,3 +428,23 @@ func TestCoreLinkedNextcloudAppearsByItself(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 }
+
+func TestIndexingSkipsIconsAndAppFolders(t *testing.T) {
+	for _, c := range []struct {
+		path string
+		size int64
+		want bool
+	}{
+		{"Photos/2026/IMG_0001.HEIC", 2 << 20, true},
+		{"Photos/clip.mov", 10 << 10, true}, // videos are kept whatever their size
+		{"Games/sprites/coin.png", 4 << 10, false},
+		{"Programming/app/node_modules/pkg/logo.jpg", 300 << 10, false},
+		{"Photos/@eaDir/IMG_0001.jpg/SYNOPHOTO_THUMB_XL.jpg", 200 << 10, false},
+		{"Scans/receipt.jpg", 0, true}, // size unknown: kept
+	} {
+		e := cloud.Entry{Path: c.path, Name: c.path[strings.LastIndex(c.path, "/")+1:], Size: c.size}
+		if got := worthIndexing(e); got != c.want {
+			t.Errorf("%s (%d bytes): %v, want %v", c.path, c.size, got, c.want)
+		}
+	}
+}

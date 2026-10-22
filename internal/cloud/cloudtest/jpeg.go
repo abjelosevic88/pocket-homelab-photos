@@ -71,7 +71,11 @@ func JPEG(w, h int, orientation uint16) []byte {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for x := 0; x < w; x++ {
 		for y := 0; y < h; y++ {
-			img.Set(x, y, color.RGBA{uint8(x), uint8(y), 128, 255})
+			// deterministic noise, so the JPEG is the size of a real photo (a few hundred KB), not an icon
+			n := uint32(x*73856093 ^ y*19349663)
+			n ^= n >> 13
+			n *= 0x5bd1e995
+			img.Set(x, y, color.RGBA{uint8(x) ^ uint8(n), uint8(y) ^ uint8(n>>8), uint8(n >> 16), 255})
 		}
 	}
 	img.Set(0, 0, color.RGBA{255, 0, 0, 255})

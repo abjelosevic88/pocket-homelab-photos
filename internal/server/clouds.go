@@ -836,16 +836,33 @@ func (s *Server) runScan(ctx context.Context, id int64, st *scanState) {
 		return
 	}
 	scanNo := time.Now().UnixNano()
+	// Metadata is read while the listing is still going, so a large cloud fills in from the first
+	// minute instead of after the whole walk.
+	ictx, stopIndex := context.WithCancel(ctx)
+	defer stopIndex()
+	walkDone := make(chan struct{})
+	indexed := make(chan error, 1)
+	go func() { indexed <- s.indexWhileWalking(ictx, p, id, st, walkDone) }()
 	next, full, err := p.Walk(ctx, a.Root, a.Cursor, func(e cloud.Entry) error {
 		if e.Deleted {
 			return s.store.DeleteCloudItemByRemote(ctx, id, e.ID)
+		}
+		if !worthIndexing(e) {
+			return nil
 		}
 		it := entryItem(id, e)
 		_, err := s.store.UpsertCloudItem(ctx, it, scanNo)
 		st.seen.Add(1)
 		return err
 	})
+	close(walkDone)
 	if err != nil {
+		stopIndex()
+		<-indexed
+		finish(err)
+		return
+	}
+	if err := <-indexed; err != nil {
 		finish(err)
 		return
 	}
@@ -856,15 +873,30 @@ func (s *Server) runScan(ctx context.Context, id int64, st *scanState) {
 		}
 	}
 	_ = s.store.SetCloudCursor(ctx, id, next)
-	if n, err := s.store.CountCloudIndexed(ctx, id); err == nil {
-		st.indexed.Store(int64(n))
-	}
-	if err := s.indexPending(ctx, p, id, st); err != nil {
-		finish(err)
-		return
-	}
 	s.geocodePending(ctx, a)
 	finish(nil)
+}
+
+// Folders that hold app and system files, never anybody's photos.
+var skipDirs = map[string]bool{
+	"node_modules": true, ".git": true, ".svn": true, "vendor": true, "__macosx": true, ".thumbnails": true, ".thumbs": true,
+	"@eadir": true, "#recycle": true, ".trash": true, ".trashes": true, ".cache": true, "cache": true, "thumbnails": true,
+	".stfolder": true, ".stversions": true, "appdata": true, "site-packages": true, ".npm": true, ".gradle": true,
+}
+
+// worthIndexing keeps photos and videos and leaves out what only looks like one: icons, sprites and
+// thumbnails (images under 64 KiB — a camera photo is hundreds of KB) and files in app/system folders.
+func worthIndexing(e cloud.Entry) bool {
+	for _, seg := range strings.Split(strings.ToLower(e.Path), "/") {
+		if skipDirs[seg] {
+			return false
+		}
+	}
+	_, video, _ := cloud.MediaType(e.Name, e.Mime)
+	if e.Size > 0 && !video && e.Size < 64<<10 {
+		return false
+	}
+	return true
 }
 
 func entryItem(accountID int64, e cloud.Entry) *store.CloudItem {
@@ -904,6 +936,26 @@ func itemEntry(it *store.CloudItem) cloud.Entry {
 	e := cloud.Entry{ID: it.RemoteID, Path: it.Path, Name: it.Name, Mime: it.Mime, Size: it.Size, ETag: it.ETag, WebURL: it.WebURL, ThumbRef: it.ThumbRef}
 	e.Modified, _ = time.Parse(time.RFC3339, it.ModifiedAt)
 	return e
+}
+
+// indexWhileWalking keeps reading metadata of newly listed items until the walk has ended and
+// nothing is left.
+func (s *Server) indexWhileWalking(ctx context.Context, p cloud.Provider, id int64, st *scanState, walkDone <-chan struct{}) error {
+	if n, err := s.store.CountCloudIndexed(ctx, id); err == nil {
+		st.indexed.Store(int64(n))
+	}
+	for {
+		if err := s.indexPending(ctx, p, id, st); err != nil {
+			return err
+		}
+		select {
+		case <-walkDone:
+			return s.indexPending(ctx, p, id, st) // what the last pages of the listing added
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
 }
 
 // indexPending reads the metadata of every item the listing did not describe, four at a time.

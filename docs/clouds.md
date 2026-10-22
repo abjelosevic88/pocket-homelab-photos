@@ -68,6 +68,11 @@ Accounts rescan by themselves every `CLOUD_SCAN_INTERVAL` (6 hours); unchanged f
 read again, and OneDrive and Dropbox only report what changed since the last scan. Two accounts are scanned at a time,
 four files per account at once.
 
+**What counts as a photo.** Images under 64 KiB (icons, game sprites, thumbnails) and files in app and system
+folders (`node_modules`, `.git`, caches, Synology `@eaDir`, `.thumbnails`, trash) are left out; videos are kept
+whatever their size. Metadata is read while the listing is still running, so a large cloud fills in from the first
+minute.
+
 **Nextcloud** goes through Pocket Core when the box has one: Photos asks Core for the Nextcloud login Core keeps for the
 person (the same one Calendar, Notes and Contacts use), so nothing is typed in. Without Core — or if Core has no
 Nextcloud login for you — connect directly with the Nextcloud address, your user name and an app password.
