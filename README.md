@@ -96,6 +96,24 @@ All screenshots use the fixture library — real photographs from Unsplash, made
 - Uses only `files:read` and `documents:read`; Core decides per person, and the source app checks folder,
   share and document access on every read.
 
+## Ask AI about a photo
+
+Open a photo in the library or a cloud source and click **Ask AI** in the viewer
+(the sparkle button on phones). Pocket Ask opens with a preview attached and an
+editable question. Try “What does the error in this screenshot mean?”, “Read the
+text in this photo”, or “Suggest a caption”. Press **Ask** to send it, then ask
+follow-up questions in the same conversation.
+
+Photos must be connected to Core, and Core must share Photos and Pocket AI with
+your account. Sign in to Core and enable Pocket Ask when prompted. The model
+selector uses the existing Pocket AI service; no separate API key is needed here.
+
+Only after you press Ask does the preview go to Pocket AI and its model provider.
+The preview is resized to at most 1,600 pixels on its longest side, so very small
+text may not be readable. The original is unchanged, cloud photos do not need
+importing, and your cloud credentials are not shared. This action supports photos,
+not video analysis. Your questions are saved as private Pocket AI conversations.
+
 ## Run it
 
 ```sh

@@ -10,6 +10,7 @@ import { Icon } from './icons'
 import { MiniMap } from './PhotoMap'
 import { errMsg, useToast } from './ui'
 import { usePanZoom } from './usePanZoom'
+import { PhotoAskButton } from './PhotoAskButton'
 
 export type CloudRef = CloudItem | { id: number; name?: undefined }
 
@@ -62,7 +63,7 @@ export function CloudViewer({ items, index, setIndex, onClose, onImported }: {
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('input,textarea,select') || document.querySelector('.modal-backdrop')) return
+      if ((e.target as HTMLElement).closest('input,textarea,select') || document.querySelector('.modal-backdrop, pocket-ask-launcher[open]')) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key === 'Escape') { e.preventDefault(); if (pz.zoomed) pz.reset(); else onClose() }
       else if (e.key === 'ArrowRight') go(1)
@@ -90,6 +91,8 @@ export function CloudViewer({ items, index, setIndex, onClose, onImported }: {
           <small>{[when ? fmtDate(when) : '', place, account?.name, `${index + 1} of ${items.length}`].filter(Boolean).join(' · ')}</small>
         </div>
         <span className="spacer" />
+        {item && !item.video && <PhotoAskButton key={item.id} previewURL={cloudPreview(item.id)} name={item.name}
+          context={`Photo: ${item.name}\nSource: ${account?.name || kind.label}\n${item.taken_at ? 'Taken' : 'File date'}: ${when || 'Unknown'}`} onError={setError} />}
         <button type="button" className={`vbtn ${info ? 'on' : ''}`} aria-label="Show photo information" aria-pressed={info} title="Details (i)" onClick={() => setInfo(!info)}><Icon name="info" size={19} /></button>
         {item && <a className="vbtn" href={cloudOriginal(item.id)} download={item.name} aria-label="Download original" title="Download original"><Icon name="download" size={19} /></a>}
         {item && (imported

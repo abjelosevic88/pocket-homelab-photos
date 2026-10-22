@@ -306,6 +306,15 @@ async function handle(route) {
 const browser = process.env.CDP ? await chromium.connectOverCDP(process.env.CDP) : await chromium.launch({ headless: true })
 const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, deviceScaleFactor: 1, colorScheme: 'light', timezoneId: 'Europe/Sarajevo' })
 await context.route('**/api/v1/**', handle)
+// Exercise the shared launcher with a test Core frame capturing the photo handoff.
+const askWidget = await fs.readFile(new URL('../third_party/pocket-core/sdk/ask-widget.js', import.meta.url), 'utf8')
+await context.route('**/pocket-ask.js', route => route.fulfill({ contentType: 'application/javascript', body: '(()=>{const config={app:"photos",core:"https://core.photos.test"};' + askWidget + '})();' }))
+await context.route('https://core.photos.test/ask*', route => route.fulfill({ contentType: 'text/html', body: `<html><body><textarea aria-label="Your question"></textarea><script>
+const origin=JSON.parse(decodeURIComponent(location.hash.slice(1))).origin;
+window.addEventListener('message',e=>{if(e.source===parent&&e.origin===origin&&e.data.type==='pocket-ask-context'){window.received=e.data;document.querySelector('textarea').value=e.data.prompt||'';}});
+parent.postMessage({type:'pocket-ask-ready'},origin);
+</script></body></html>` }))
+
 // Headless Chrome in a container rarely has the system UI fonts the app asks for and falls back to
 // a face without bold; Open Sans (in zenika/alpine-chrome) is the closest stand-in for the screenshots.
 await context.addInitScript(() => {
@@ -398,9 +407,34 @@ try {
   await page.goto(base + '/')
   await page.locator('.tile').first().waitFor()
 
+  const askPhoto = async expectedPath => {
+    const title = await page.locator('.viewer-title b').innerText()
+    const before = calls.filter(c => c.method === 'POST' && c.p.includes('ask')).length
+    await btn('Ask AI about this photo').click()
+    const frame = page.frameLocator('pocket-ask-launcher iframe')
+    await frame.getByLabel('Your question').waitFor()
+    await page.waitForFunction(() => document.querySelector('pocket-ask-launcher')?.hasAttribute('open'))
+    const child = page.frames().find(f => f.url().startsWith('https://core.photos.test/ask'))
+    await child.waitForFunction(() => !!window.received?.source.image)
+    const data = await child.evaluate(() => window.received)
+    assert.equal(data.source.app, 'photos')
+    assert.ok(new URL(data.source.url).pathname.includes(expectedPath))
+    assert.ok(data.source.image.data_url.startsWith('data:image/jpeg;base64,'))
+    assert.ok(data.source.image.data_url.length > 1000 && data.source.image.data_url.length < 2800000)
+    assert.equal(await frame.getByLabel('Your question').inputValue(), 'Describe this photo and explain any visible text.')
+    assert.equal(calls.filter(c => c.method === 'POST' && c.p.includes('ask')).length, before, 'opening Ask never sends a question')
+    await page.getByRole('button', { name: 'Close Pocket Ask', exact: true }).focus()
+    await page.keyboard.press('ArrowRight')
+    assert.equal(await page.locator('.viewer-title b').innerText(), title, 'Ask captures navigation keys')
+    await page.keyboard.press('Escape')
+    assert.equal(await page.locator('.viewer').count(), 1, 'Escape closes Ask without closing the photo')
+    assert.equal(await page.locator('pocket-ask-launcher').getAttribute('open'), null)
+  }
+
   // viewer: details, description, favorite, next, close
   const first = assets.find(a => a.type === 'IMAGE' && !a.isFavorite)
   await openTile(first)
+  await askPhoto('/immich/assets/' + first.id + '/thumbnail')
   if (!(await page.locator('.viewer-info').isVisible())) await btn('Show photo information').click()
   await page.getByLabel('Description', { exact: true }).fill('A wonderful walk')
   await btn('Save description').click()
@@ -440,6 +474,7 @@ try {
     return { st: { left: st.left, top: st.top, right: st.right, bottom: st.bottom }, r: { left: r.left, top: r.top, width: r.width, height: r.height }, c, t: im.style.transform }
   })
   const settleZoom = () => page.waitForTimeout(400)
+  await settleZoom() // settle the details-panel resize before measuring/clicking
   let g0 = await geom()
   const px = g0.c.left + g0.c.width * 0.25, py = g0.c.top + g0.c.height * 0.3
   const frac = g => [(px - g.r.left) / g.r.width, (py - g.r.top) / g.r.height]
@@ -636,6 +671,11 @@ try {
   const located = ncItems.find(i => i.lat != null && i.taken_at)
   await page.getByRole('button', { name: `Open ${located.name}`, exact: true }).click()
   await page.locator('.cloud-viewer').waitFor()
+  await askPhoto('/clouds/items/' + located.id + '/preview')
+  await page.setViewportSize({ width: 390, height: 844 })
+  await askPhoto('/clouds/items/' + located.id + '/preview')
+  assert.ok(await page.locator('.viewer-bar').evaluate(el => el.scrollWidth <= innerWidth), 'photo Ask fits on mobile')
+  await page.setViewportSize({ width: 1440, height: 960 })
   if (!(await page.locator('.cloud-viewer .viewer-info').isVisible())) await btn('Show photo information').click()
   await page.locator('.cloud-viewer .viewer-info').getByText(`${located.city}, ${located.country}`, { exact: true }).waitFor()
   assert.ok(await page.locator('.cloud-viewer .mini-map').isVisible(), 'a small map shows where it was taken')

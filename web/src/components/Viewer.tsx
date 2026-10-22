@@ -8,6 +8,7 @@ import { Icon } from './icons'
 import { Select } from './Select'
 import { Confirm, errMsg, useToast } from './ui'
 import { usePanZoom } from './usePanZoom'
+import { PhotoAskButton } from './PhotoAskButton'
 
 const RATINGS = [{ value: 0, label: 'Unrated' }, ...[1, 2, 3, 4, 5].map(n => ({ value: n, label: '★'.repeat(n) }))]
 
@@ -88,7 +89,7 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('input,textarea,select,.select-pop') || document.querySelector('.modal-backdrop')) return
+      if ((e.target as HTMLElement).closest('input,textarea,select,.select-pop') || document.querySelector('.modal-backdrop, pocket-ask-launcher[open]')) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key === 'Escape') { e.preventDefault(); if (editing) setEditing(false); else if (pz.zoomed) pz.reset(); else onClose() }
       else if (zoomable && (e.key === '+' || e.key === '=')) pz.zoomBy(1.5)
@@ -151,6 +152,9 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
           <small>{fmtDate(takenAt(detail))}{placeName(ex) ? ' · ' + placeName(ex) : ''} · {index + 1} of {assets.length}</small>
         </div>
         <span className="spacer" />
+        {detail.type !== 'VIDEO' && !editing && <PhotoAskButton key={asset.id} previewURL={thumb(asset.id, 'preview') + '&v=' + imageVersion}
+          name={detail.originalFileName || 'Photo'} context={`Photo: ${detail.originalFileName || 'Photo'}\nDescription: ${ex.description || ''}\nTaken: ${takenAt(detail) || 'Unknown'}\nSource: Immich library`}
+          onOpen={() => { setSlide(false); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}) }} onError={setError} />}
         <button type="button" className={`vbtn ${detail.isFavorite ? 'fav' : ''}`} aria-label={detail.isFavorite ? 'Remove from favorites' : 'Add to favorites'} title="Favorite (f)" disabled={busy} onClick={() => update({ isFavorite: !detail.isFavorite })}><Icon name="heart" size={19} fill={detail.isFavorite} /></button>
         <button type="button" className={`vbtn ${info ? 'on' : ''}`} aria-label="Show photo information" aria-pressed={info} title="Details (i)" onClick={() => setInfo(!info)}><Icon name="info" size={19} /></button>
         <button type="button" className={`vbtn ${editing ? 'on' : ''}`} aria-label="Edit photo" title="Edit (e)" disabled={detail.type === 'VIDEO' || detail.isTrashed} onClick={startEdit}><Icon name="edit" size={19} /></button>

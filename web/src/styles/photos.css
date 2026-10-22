@@ -148,7 +148,9 @@ button.person-name { color: var(--muted); font-weight: 550; }
 
 /* ---------- viewer ---------- */
 body.viewer-open { overflow: hidden; }
-body.viewer-open pocket-ask-launcher { display: none; }
+body.viewer-open pocket-ask-launcher:not([open]) { display: none; }
+.photo-ask { flex-shrink: 0; margin-right: 6px; }
+@media (max-width: 650px) { .photo-ask { width: 36px; padding: 0; justify-content: center; } .photo-ask span { display: none; } }
 .viewer { position: fixed; inset: 0; z-index: 280; background: #0b0b0d; color: #f1f1f4; display: flex; flex-direction: column; animation: fade-in .16s ease; outline: none; }
 .viewer-bar { display: flex; align-items: center; gap: 2px; height: 56px; padding: 0 10px; padding-top: env(safe-area-inset-top); flex-shrink: 0; background: linear-gradient(180deg, rgba(0, 0, 0, .55), transparent); position: relative; z-index: 3; }
 .viewer-title { display: grid; min-width: 0; margin-left: 8px; }
