@@ -1,11 +1,12 @@
 // Photos indexed in one of the person's clouds: review them where they are, see them on the map, import what you pick.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError, type CloudFilter, cloudThumb, clouds, isAbort } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import { cloudCounts, cloudKind, cloudPlace, cloudStatus, cloudWhen, groupCloud } from '../lib/clouds'
 import { fmtDuration, groupLabel, plural } from '../lib/photos'
 import type { CloudItem, MapMarker } from '../lib/types'
+import { PhotoTimeline } from '../components/PhotoTimeline'
 import { CloudViewer } from '../components/CloudViewer'
 import { Icon } from '../components/icons'
 import { usePageTitle } from '../components/Layout'
@@ -27,6 +28,13 @@ const FILTERS: { value: CloudFilter; label: string }[] = [
 export default function CloudSource() {
   const { id: raw } = useParams()
   const id = Number(raw)
+  const [sp, setSp] = useSearchParams()
+  const jumpDate = sp.get('date') || ''
+  const [visibleMonth, setVisibleMonth] = useState('')
+  const [timelineOpen, setTimelineOpen] = useState(false)
+  const [timelineRevision, setTimelineRevision] = useState(0)
+  const scrollAfterLoad = useRef(false)
+  const previousDate = useRef(jumpDate)
   const { clouds: accounts, connection, bump, reloadClouds, density } = useApp()
   const { toast } = useToast()
   const account = accounts?.find(a => a.id === id)
@@ -65,7 +73,7 @@ export default function CloudSource() {
     const n = ++query.current
     loadingRef.current = true; setLoading(true); setError('')
     try {
-      const page = await clouds.items({ account: id, cursor: from, limit: PAGE, filter, type, q: search }, signal)
+      const page = await clouds.items({ account: id, cursor: from, limit: PAGE, filter, type, q: search, date: jumpDate }, signal)
       if (n !== query.current) return
       setItems(old => (from ? [...old, ...page.items.filter(i => !old.some(o => o.id === i.id))] : page.items))
       setTotal(page.total); setCursor(page.next_cursor || null); setMissing(false)
@@ -75,18 +83,52 @@ export default function CloudSource() {
       if (e instanceof ApiError && e.status === 404) setMissing(true)
       else setError(errMsg(e))
     } finally { if (n === query.current) { loadingRef.current = false; setLoading(false) } }
-  }, [id, filter, type, search])
+  }, [id, filter, type, search, jumpDate])
 
   useEffect(() => {
     const c = new AbortController()
+    if (previousDate.current !== jumpDate) scrollAfterLoad.current = true
+    previousDate.current = jumpDate
     const reveal = foundRequest !== handledFound.current
     handledFound.current = foundRequest
     // Keep the existing photos visible during a manual refresh.
     if (!reveal) setItems([])
-    setCursor(null); setSelected(new Set()); setResults([]); setFoundShown(false)
+    setVisibleMonth(''); setCursor(null); setSelected(new Set()); setResults([]); setFoundShown(false)
     load(null, c.signal, reveal)
-    return () => c.abort()
+    return () => { c.abort(); query.current++ }
   }, [load, foundRequest])
+
+  const loadTimeline = useCallback((signal: AbortSignal) => clouds.timeline({ account: id, filter, type, q: search }, signal), [id, filter, type, search, account?.last_scan_at, account?.counts?.items, timelineRevision, foundRequest])
+
+  function jumpToDate(date: string) {
+    setVisibleMonth(''); setTimelineOpen(false)
+    if (date === jumpDate) { resultsStart.current?.scrollIntoView({ block: 'start', behavior: 'instant' }); return }
+    scrollAfterLoad.current = true
+    setSp(old => { const next = new URLSearchParams(old); if (date) next.set('date', date); else next.delete('date'); return next })
+  }
+  useLayoutEffect(() => {
+    if (!scrollAfterLoad.current || loading) return
+    scrollAfterLoad.current = false
+    resultsStart.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
+  }, [items, loading])
+
+  useEffect(() => {
+    if (tab !== 'photos' || loading) return
+    const root = resultsStart.current?.closest('.content')
+    if (!root) return
+    let frame = 0
+    const update = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const top = root.getBoundingClientRect().top + 100
+        if ((resultsStart.current?.getBoundingClientRect().top || 0) >= top - 50) { setVisibleMonth(''); return }
+        const group = [...root.querySelectorAll<HTMLElement>('[data-cloud-month]')].find(el => el.getBoundingClientRect().bottom >= top)
+        if (group) setVisibleMonth(group.dataset.cloudMonth || '')
+      })
+    }
+    root.addEventListener('scroll', update, { passive: true }); update()
+    return () => { cancelAnimationFrame(frame); root.removeEventListener('scroll', update) }
+  }, [items, tab, loading])
 
   useLayoutEffect(() => {
     if (!revealVersion) return
@@ -95,7 +137,7 @@ export default function CloudSource() {
   }, [revealVersion])
 
   function showFound() {
-    setTab('photos'); setFilter('all'); setType(''); setQ(''); setSearch('')
+    setTab('photos'); setFilter('all'); setType(''); setQ(''); setSearch(''); if (jumpDate) jumpToDate('')
     setLoading(true); setFoundShown(false)
     setFoundRequest(v => v + 1)
   }
@@ -159,7 +201,7 @@ export default function CloudSource() {
     }
     setProgress(''); setImporting(false); setSelected(new Set())
     toast(`${plural(all.filter(r => r.ok).length, 'photo')} in your library. Nothing in ${account?.name || 'the cloud'} was changed.`)
-    bump(); reloadClouds()
+    bump(); reloadClouds(); setTimelineRevision(v => v + 1)
   }
 
   const toggle = (i: CloudItem) => setSelected(old => { const n = new Set(old); if (n.has(i.id)) n.delete(i.id); else n.add(i.id); return n })
@@ -175,7 +217,7 @@ export default function CloudSource() {
   if (!account) return <div className="page"><Loading label="Opening your cloud…" /></div>
 
   return (
-    <div className="page sources cloud-page">
+    <div className={`page sources cloud-page ${tab === 'photos' ? 'timeline-layout' : ''}`}>
       <PageHeader title={account.name} sub={`${kind.label}${account.login ? ' · ' + account.login : ''}${account.root ? ' · ' + account.root : ''} · ${cloudCounts(account)}`}
         actions={<>
           <ImportInfo source={account.name} cloud />
@@ -195,6 +237,7 @@ export default function CloudSource() {
         <div className="source-tools">
           <Segmented options={FILTERS} value={filter} onChange={v => setFilter(v)} size="sm" label="Show" />
           <Select value={type} options={[{ value: '', label: 'Photos and videos' }, { value: 'image', label: 'Photos' }, { value: 'video', label: 'Videos' }]} onChange={v => setType(v as '' | 'image' | 'video')} label="Type" size="sm" className="inline" width={170} />
+          <button type="button" className="btn sm timeline-mobile-toggle" aria-controls="photo-timeline" aria-expanded={timelineOpen} onClick={() => setTimelineOpen(o => !o)}><Icon name="clock" size={14} />Timeline</button>
           <span className="spacer" />
           <form className="search-field sm" onSubmit={e => { e.preventDefault(); setSearch(q.trim()) }}>
             <Icon name="search" size={15} />
@@ -217,11 +260,12 @@ export default function CloudSource() {
           <p className="muted small tnum cloud-total" role="status">{foundShown && <span className="cloud-updated">Updated · </span>}{total === items.length ? plural(total, 'item') : `${items.length.toLocaleString()} of ${plural(total, 'item')}`}{foundShown ? ' found so far' : ''}</p>
         </div>
 
+        <div className="timeline-position"><span>{jumpDate ? `Browsing from ${groupLabel(jumpDate, jumpDate.length === 4 ? 'year' : 'month')}` : 'Latest photos and videos'}</span>{jumpDate && <button type="button" className="btn ghost sm" onClick={() => jumpToDate('')}>Back to latest</button>}</div>
         <div className={`photo-groups ${picking ? 'picking' : ''}`}>
           {groups.map(([key, list]) => {
             const all = list.every(i => selected.has(i.id))
             return (
-              <section className="photo-group" key={key}>
+              <section className="photo-group" data-cloud-month={key} key={key}>
                 <h2 className="group-head">
                   <button type="button" className={`group-check ${all ? 'on' : ''}`} aria-label={`Select ${groupLabel(key, 'month')}`} aria-pressed={all}
                     onClick={() => setSelected(old => { const n = new Set(old); list.forEach(i => (all ? n.delete(i.id) : n.add(i.id))); return n })}>
@@ -294,9 +338,10 @@ export default function CloudSource() {
         const index = open >= 0 ? open : -1 - open
         if (!list[index]) return null
         return <CloudViewer items={list} index={index} setIndex={n => setOpen(open >= 0 ? n : -1 - n)} onClose={() => setOpen(null)}
-          onImported={it => { setItems(old => old.map(x => (x.id === it.id ? it : x))); setMapItems(old => old && old.map(x => (x.id === it.id ? it : x))) }} />
+          onImported={it => { setTimelineRevision(v => v + 1); setItems(old => old.map(x => (x.id === it.id ? it : x))); setMapItems(old => old && old.map(x => (x.id === it.id ? it : x))) }} />
       })()}
       </div>
+      {tab === 'photos' && <PhotoTimeline key={id} active={visibleMonth || jumpDate} onJump={jumpToDate} mobileOpen={timelineOpen} onClose={() => setTimelineOpen(false)} loadBuckets={loadTimeline} itemLabel="items" />}
     </div>
   )
 }

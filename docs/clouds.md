@@ -36,7 +36,8 @@ All routes need a signed-in person and only ever see that person's accounts; ano
 | `PUT /api/v1/clouds/{id}` | `{name?, root?, fields?}` → `Account` |
 | `DELETE /api/v1/clouds/{id}` | forgets the account, its index and thumbnails; the cloud is untouched |
 | `POST /api/v1/clouds/{id}/scan` | starts a rescan → `Account` (202) |
-| `GET /api/v1/clouds/items` | `?account=&cursor=&limit=&filter=all\|new\|imported\|located\|unlocated&type=image\|video&q=&order=desc\|asc` → `{items: [Item], next_cursor, total}` |
+| `GET /api/v1/clouds/timeline` | `?account=&filter=&type=&q=` → monthly `{timeBucket, count}` totals for all matching indexed items |
+| `GET /api/v1/clouds/items` | `?account=&cursor=&limit=&filter=all\|new\|imported\|located\|unlocated&type=image\|video&q=&order=desc\|asc&date=YYYY-MM` → `{items: [Item], next_cursor, total}` |
 | `GET /api/v1/clouds/items/{id}` | `Item` |
 | `GET /api/v1/clouds/items/{id}/thumb` | JPEG, about 360 px (404 when the cloud has none for that format) |
 | `GET /api/v1/clouds/items/{id}/preview` | a browser-safe image up to about 2048 px (the original when it is already web-safe) |
@@ -98,3 +99,5 @@ and imported.
 
 **Place names** come from your Immich server's reverse geocoder (`/map/reverse-geocode`, the `map.search`
 permission), cached per square kilometre — no outside service is asked.
+
+The cloud review sidebar has the same year/month timeline as the library. Counts follow the cloud, search, media type and import/location filters across the full index. Choose a year or month to jump directly to that period and browse older items; **Latest** resets the jump. On phones, use **Timeline** above the grid. Dates use capture time when known, otherwise the file modification date; undated items stay in the grid but have no timeline bucket.

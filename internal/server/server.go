@@ -158,6 +158,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/clouds/oauth/{kind}/start", s.handleCloudOAuthStart)
 			r.Get("/clouds/oauth/{kind}/callback", s.handleCloudOAuthCallback)
 			r.Get("/clouds/items", s.handleCloudItems)
+			r.Get("/clouds/timeline", s.handleCloudTimeline)
 			r.Get("/clouds/map", s.handleCloudMap)
 			r.Get("/clouds/items/{id}", s.handleCloudItem)
 			r.Get("/clouds/items/{id}/thumb", s.handleCloudThumb)

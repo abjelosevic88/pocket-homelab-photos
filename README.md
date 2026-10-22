@@ -87,6 +87,8 @@ All screenshots use the fixture library — real photographs from Unsplash, made
 - Photos finds every photo and video there and reads its date, camera and GPS position — from the cloud's
   own metadata, or from the file with a few small range requests, never by copying the library — and keeps
   a thumbnail. Place names come from your Immich, nothing leaves the box.
+- Jump through each cloud with the year/month timeline in the sidebar (the **Timeline** button on phones);
+  counts follow your search and filters across the full index.
 - Browse each cloud by month, filter to what is not in your library yet or has no location, open photos
   full size, see them on the Places map next to your Immich photos, and import the ones you want.
   The clouds are only ever read. New photos are picked up every few hours.

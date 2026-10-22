@@ -1121,6 +1121,26 @@ func (s *Server) handleCloudItems(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r.Context())
 	q := r.URL.Query()
 	cq := store.CloudQuery{UserID: u.ID, Filter: q.Get("filter"), Type: q.Get("type"), Q: q.Get("q"), Asc: q.Get("order") == "asc", Cursor: q.Get("cursor")}
+	if date := q.Get("date"); date != "" {
+		layout := "2006-01"
+		if len(date) == 4 {
+			layout = "2006"
+		} else if len(date) != 7 {
+			writeErr(w, 400, "invalid timeline date")
+			return
+		}
+		parsed, err := time.Parse(layout, date)
+		if err != nil || parsed.Year() < 1 || parsed.Year() > 9998 {
+			writeErr(w, 400, "invalid timeline date")
+			return
+		}
+		if len(date) == 4 {
+			parsed = parsed.AddDate(1, 0, 0)
+		} else {
+			parsed = parsed.AddDate(0, 1, 0)
+		}
+		cq.Before = parsed.Format("2006-01-02")
+	}
 	cq.Limit, _ = strconv.Atoi(q.Get("limit"))
 	accounts := map[int64]*store.CloudAccount{}
 	if v := q.Get("account"); v != "" {
@@ -1153,6 +1173,25 @@ func (s *Server) handleCloudItems(w http.ResponseWriter, r *http.Request) {
 		it.HasThumb = hasThumb(a, it)
 	}
 	writeJSON(w, 200, map[string]any{"items": items, "next_cursor": next, "total": total})
+}
+
+func (s *Server) handleCloudTimeline(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	query := store.CloudQuery{UserID: userFrom(r.Context()).ID, Filter: q.Get("filter"), Type: q.Get("type"), Q: q.Get("q")}
+	if raw := q.Get("account"); raw != "" {
+		id, _ := strconv.ParseInt(raw, 10, 64)
+		if _, err := s.store.GetCloudAccount(r.Context(), query.UserID, id); err != nil {
+			s.fail(w, err, "cloud account")
+			return
+		}
+		query.AccountID = id
+	}
+	buckets, err := s.store.CloudTimeline(r.Context(), query)
+	if err != nil {
+		s.fail(w, err, "cloud timeline")
+		return
+	}
+	writeJSON(w, 200, buckets)
 }
 
 func (s *Server) cloudItem(w http.ResponseWriter, r *http.Request) (*store.CloudItem, *store.CloudAccount) {

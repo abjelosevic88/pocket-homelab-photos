@@ -266,7 +266,7 @@ async function handle(route) {
     if (method === 'PUT') Object.assign(a, { name: body.name ?? a.name, root: body.root ?? a.root })
     return json(cloudDto(a))
   }
-  if (p === '/clouds/items') {
+  if (p === '/clouds/items' || p === '/clouds/timeline') {
     const q = u.searchParams, acc = Number(q.get('account') || 0)
     if (acc && !cloudAccounts.some(a => a.id === acc)) return json({ error: 'not found' }, 404)
     let list = cloudItems.filter(i => !acc || i.account_id === acc)
@@ -279,6 +279,13 @@ async function handle(route) {
     if (q.get('type') === 'image') list = list.filter(i => !i.video)
     const s = (q.get('q') || '').toLowerCase()
     if (s) list = list.filter(i => `${i.name} ${i.path} ${i.city || ''} ${i.country || ''}`.toLowerCase().includes(s))
+    if (p === '/clouds/timeline') {
+      const buckets = new Map()
+      for (const i of list) { const month = (i.taken_at || i.modified_at).slice(0, 7); buckets.set(month, (buckets.get(month) || 0) + 1) }
+      return json([...buckets].sort(([a], [b]) => b.localeCompare(a)).map(([timeBucket, count]) => ({ timeBucket, count })))
+    }
+    const date = q.get('date')
+    if (date) list = list.filter(i => (i.taken_at || i.modified_at).slice(0, date.length) <= date)
     list = list.slice().sort((a, b) => (b.taken_at || b.modified_at).localeCompare(a.taken_at || a.modified_at))
     const from = Number(q.get('cursor') || 0), size = Math.min(Number(q.get('limit') || 100), 6) // the fixture server pages by 6
     return json({ items: list.slice(from, from + size).map(cloudPublic), next_cursor: from + size < list.length ? String(from + size) : null, total: list.length })
@@ -641,13 +648,42 @@ try {
   assert.ok(await page.getByRole('tab', { name: /Ana’s Drive/ }).isVisible(), 'cloud accounts sit next to the apps')
   assert.ok(await page.getByRole('button', { name: /Add a cloud/ }).isVisible())
   assert.ok(await page.locator('.sidebar .cal-name').filter({ hasText: 'Ana’s Drive' }).isVisible(), 'clouds are listed in the sidebar')
+  const waitCloudCount = async count => page.waitForFunction(n => {
+    if (document.querySelectorAll('.cloud-tile').length === n) return true
+    const content = document.querySelector('.content')
+    if (content) content.scrollTop = content.scrollHeight
+    return false
+  }, count)
   const pages0 = calls.filter(c => c.p === '/clouds/items').length
   await page.getByRole('tab', { name: /^Nextcloud/ }).click()
   await page.waitForURL(/\/sources\/cloud\/1$/)
-  await page.waitForFunction(n => document.querySelectorAll('.cloud-tile').length === n, ncItems.length)
+  await waitCloudCount(ncItems.length)
   assert.ok(calls.filter(c => c.p === '/clouds/items').length - pages0 >= 3, 'endless scroll fetched the following pages')
   assert.equal(await page.locator('.cloud-tile.in-library').count(), ncItems.filter(i => i.import_status).length)
   assert.equal(await page.locator('.cloud-tile .tile-pin').count(), ncItems.filter(i => i.lat != null).length)
+  // The cloud rail aggregates all pages and jumps directly to dates in this account.
+  const cloudTimeline = page.locator('.photo-timeline')
+  await cloudTimeline.locator('.timeline-year-jump').first().waitFor()
+  assert.equal(await cloudTimeline.locator('.timeline-heading > span').textContent(), String(ncItems.length))
+  const cloudOldMonth = ncItems.map(i => (i.taken_at || i.modified_at).slice(0, 7)).sort()[0]
+  const cloudOldYear = cloudOldMonth.slice(0, 4)
+  await cloudTimeline.getByRole('button', { name: new RegExp(`^Jump to ${cloudOldYear},`) }).click()
+  await page.waitForURL(u => u.searchParams.get('date') === cloudOldYear)
+  const cloudMonthName = new Date(Number(cloudOldYear), Number(cloudOldMonth.slice(5)) - 1, 1).toLocaleDateString('en', { month: 'long' })
+  await cloudTimeline.getByRole('button', { name: new RegExp(`^Jump to ${cloudMonthName} ${cloudOldYear},`) }).click()
+  await page.waitForURL(u => u.searchParams.get('date') === cloudOldMonth)
+  await page.waitForFunction(month => document.querySelector('[data-cloud-month]')?.getAttribute('data-cloud-month') === month, cloudOldMonth)
+  await cloudTimeline.getByRole('button', { name: 'Latest', exact: true }).click()
+  await page.waitForURL(u => !u.searchParams.has('date'))
+  await waitCloudCount(ncItems.length)
+  await page.locator('.content').evaluate(el => el.scrollTo({ top: 0, behavior: 'instant' }))
+  await page.screenshot({ path: '/tmp/pocket-cloud-timeline-desktop.png' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: 'Timeline', exact: true }).click()
+  assert.ok(await page.locator('.photo-timeline.mobile-open').isVisible())
+  await page.screenshot({ path: '/tmp/pocket-cloud-timeline-mobile.png' })
+  await page.getByRole('button', { name: 'Close timeline', exact: true }).click()
+  await page.setViewportSize({ width: 1440, height: 960 })
   for (const x of await page.locator('.toast-x').all()) await x.click().catch(() => {})
   await page.waitForFunction(() => !document.querySelector('.toasts .toast-x'))
   await page.mouse.move(5, 300) // no hover state on a tile
@@ -655,12 +691,13 @@ try {
   const filtered = page.waitForRequest(r => r.url().includes('/clouds/items') && new URL(r.url()).searchParams.get('filter') === 'new')
   await page.getByRole('radio', { name: 'Not in library', exact: true }).click()
   await filtered
-  await page.waitForFunction(n => document.querySelectorAll('.cloud-tile').length === n, ncItems.filter(i => !i.import_status).length)
+  await waitCloudCount(ncItems.filter(i => !i.import_status).length)
   assert.equal(await page.locator('.cloud-tile.in-library').count(), 0)
+  await page.waitForFunction(n => document.querySelector('.photo-timeline .timeline-heading > span')?.textContent === String(n), ncItems.filter(i => !i.import_status).length)
   await page.getByRole('radio', { name: 'With location', exact: true }).click()
-  await page.waitForFunction(n => document.querySelectorAll('.cloud-tile').length === n, ncItems.filter(i => i.lat != null).length)
+  await waitCloudCount(ncItems.filter(i => i.lat != null).length)
   await page.getByRole('radio', { name: 'All', exact: true }).click()
-  await page.waitForFunction(n => document.querySelectorAll('.cloud-tile').length === n, ncItems.length)
+  await waitCloudCount(ncItems.length)
   // Video tiles load real image previews and the player reuses the cached poster.
   const cloudVideo = ncItems.find(i => i.video)
   const videoTile = page.getByRole('button', { name: `Open ${cloudVideo.name}`, exact: true })
@@ -704,6 +741,7 @@ try {
   await page.locator('.cloud-viewer').waitFor({ state: 'detached' })
   // the account's own map
   await page.getByRole('tab', { name: 'Map', exact: true }).click()
+  assert.equal(await page.locator('.photo-timeline').count(), 0, 'cloud map has no timeline rail')
   await page.locator('.map-pin.cloud').first().waitFor()
   await page.getByRole('tab', { name: 'Photos', exact: true }).click()
   // rescan: the status follows the polling until the scan is done
@@ -732,7 +770,7 @@ try {
   const unchangedTile = await page.locator('.cloud-tile').first().elementHandle()
   let releaseFound
   const foundGate = new Promise(resolve => { releaseFound = resolve })
-  const holdFound = async route => { await foundGate; await route.fallback() }
+  const holdFound = async route => { if (!new URL(route.request().url()).searchParams.get('cursor')) await foundGate; await route.fallback() }
   await page.route('**/api/v1/clouds/items?*', holdFound)
   await page.getByRole('button', { name: 'Show what’s found', exact: true }).click()
   await page.locator('.cloud-scan').getByRole('button', { name: 'Loading…', exact: true }).waitFor()

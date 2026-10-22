@@ -300,11 +300,11 @@ type CloudQuery struct {
 	Q         string
 	Asc       bool
 	Cursor    string
+	Before    string // exclusive date boundary for a timeline jump
 	Limit     int
 }
 
-// ListCloudItems pages through a person's indexed items, newest first.
-func (s *Store) ListCloudItems(ctx context.Context, q CloudQuery) (items []*CloudItem, next string, total int, err error) {
+func cloudItemsWhere(q CloudQuery) (string, []any) {
 	where := []string{"a.user_id = ?"}
 	args := []any{q.UserID}
 	if q.AccountID > 0 {
@@ -332,7 +332,41 @@ func (s *Store) ListCloudItems(ctx context.Context, q CloudQuery) (items []*Clou
 		where = append(where, `(lower(i.path) LIKE ? ESCAPE '\' OR lower(i.city) LIKE ? ESCAPE '\' OR lower(i.country) LIKE ? ESCAPE '\' OR lower(i.camera) LIKE ? ESCAPE '\')`)
 		args = append(args, like, like, like, like)
 	}
-	base := ` FROM cloud_items i JOIN cloud_accounts a ON a.id = i.account_id WHERE ` + strings.Join(where, " AND ")
+	if q.Before != "" {
+		where = append(where, "i.sort_at < ?")
+		args = append(args, q.Before)
+	}
+	return ` FROM cloud_items i JOIN cloud_accounts a ON a.id = i.account_id WHERE ` + strings.Join(where, " AND "), args
+}
+
+type CloudBucket struct {
+	TimeBucket string `json:"timeBucket"`
+	Count      int    `json:"count"`
+}
+
+// CloudTimeline aggregates the complete filtered index, not just the loaded page.
+func (s *Store) CloudTimeline(ctx context.Context, q CloudQuery) ([]CloudBucket, error) {
+	q.Before = ""
+	base, args := cloudItemsWhere(q)
+	rows, err := s.DB.QueryContext(ctx, `SELECT substr(i.sort_at,1,7), COUNT(*)`+base+` AND i.sort_at GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-*' AND substr(i.sort_at,6,2) BETWEEN '01' AND '12' GROUP BY substr(i.sort_at,1,7) ORDER BY substr(i.sort_at,1,7) DESC`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	buckets := []CloudBucket{}
+	for rows.Next() {
+		var b CloudBucket
+		if err := rows.Scan(&b.TimeBucket, &b.Count); err != nil {
+			return nil, err
+		}
+		buckets = append(buckets, b)
+	}
+	return buckets, rows.Err()
+}
+
+// ListCloudItems pages through a person's indexed items, newest first.
+func (s *Store) ListCloudItems(ctx context.Context, q CloudQuery) (items []*CloudItem, next string, total int, err error) {
+	base, args := cloudItemsWhere(q)
 	if err = s.DB.QueryRowContext(ctx, `SELECT COUNT(*)`+base, args...).Scan(&total); err != nil {
 		return
 	}

@@ -71,6 +71,7 @@ const CLOUDS = V1 + '/clouds'
 export type CloudFilter = 'all' | 'new' | 'imported' | 'located' | 'unlocated'
 
 export const clouds = {
+  timeline: (p: { account: number; filter?: CloudFilter; type?: 'image' | 'video' | ''; q?: string }, signal?: AbortSignal) => api.get<{ timeBucket: string; count: number }[]>(`${CLOUDS}/timeline` + qs(p), signal),
   providers: (signal?: AbortSignal) => api.get<CloudProvider[]>(`${CLOUDS}/providers`, signal),
   list: (signal?: AbortSignal) => api.get<CloudAccount[]>(CLOUDS, signal),
   create: (body: { kind: string; name: string; root: string; via?: 'core'; fields: Record<string, string> }) => api.post<CloudAccount>(CLOUDS, body),
@@ -78,7 +79,7 @@ export const clouds = {
   remove: (id: number) => api.del<void>(`${CLOUDS}/${id}`),
   scan: (id: number) => api.post<CloudAccount>(`${CLOUDS}/${id}/scan`),
   oauthStart: (kind: string, account?: number) => api.get<{ url: string }>(`${CLOUDS}/oauth/${kind}/start` + qs({ json: 1, account })),
-  items: (p: { account?: number; cursor?: string | null; limit?: number; filter?: CloudFilter; type?: 'image' | 'video' | ''; q?: string; order?: 'desc' | 'asc' }, signal?: AbortSignal) =>
+  items: (p: { account?: number; cursor?: string | null; limit?: number; filter?: CloudFilter; type?: 'image' | 'video' | ''; q?: string; date?: string; order?: 'desc' | 'asc' }, signal?: AbortSignal) =>
     api.get<CloudItemsPage>(`${CLOUDS}/items` + qs({ ...p, filter: p.filter === 'all' ? undefined : p.filter }), signal),
   item: (id: number, signal?: AbortSignal) => api.get<CloudItem>(`${CLOUDS}/items/${id}`, signal),
   importItem: (id: number) => api.post<{ status: 'imported' | 'duplicate'; asset_id?: string }>(`${CLOUDS}/items/${id}/import`),
