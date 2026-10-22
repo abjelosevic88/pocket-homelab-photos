@@ -239,9 +239,8 @@ export default function CloudSource() {
                       <div key={i.id} className={`tile cloud-tile ${on ? 'selected' : ''} ${i.import_status ? 'in-library' : ''}`} style={{ ['--ar' as string]: Math.min(2.2, Math.max(0.6, ar)) }}>
                         <button type="button" className="tile-open" aria-label={`Open ${i.name}`} title={[i.name, where, cloudWhen(i).slice(0, 10)].filter(Boolean).join(' · ')}
                           onClick={e => { if (picking || e.shiftKey) toggle(i); else setOpen(items.indexOf(i)) }}>
-                          {i.has_thumb
-                            ? <img src={cloudThumb(i.id)} loading="lazy" alt="" draggable={false} onError={e => e.currentTarget.classList.add('broken')} />
-                            : <span className="tile-nothumb"><Icon name={i.video ? 'video' : 'image'} size={22} /><small className="ellipsis">{i.name}</small></span>}
+                          <span className="tile-nothumb"><Icon name={i.video ? 'video' : 'image'} size={22} /><small className="ellipsis">{i.name}</small></span>
+                          {i.has_thumb && <img className="cloud-thumbnail" src={cloudThumb(i.id)} loading="lazy" alt="" draggable={false} onLoad={e => e.currentTarget.classList.add('loaded')} onError={e => e.currentTarget.classList.add('broken')} />}
                           {i.video && <span className="tile-badge"><Icon name="play" size={10} />{fmtDuration(i.duration_ms) || 'Video'}</span>}
                           {i.import_status && <span className="tile-lib" title="In your library"><Icon name="check" size={11} strokeWidth={3} /></span>}
                           {i.lat != null && <span className="tile-pin" title={where || 'Has a location'}><Icon name="pin" size={12} /></span>}

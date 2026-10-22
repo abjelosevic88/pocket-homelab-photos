@@ -1114,7 +1114,7 @@ func hasThumb(a *store.CloudAccount, it *store.CloudItem) bool {
 			return true
 		}
 	}
-	return !it.Video && cloud.Decodable(it.Mime) && it.Size <= cloud.MaxDecode
+	return it.Video && it.Size > 0 || cloud.Decodable(it.Mime) && it.Size <= cloud.MaxDecode
 }
 
 func (s *Server) handleCloudItems(w http.ResponseWriter, r *http.Request) {
@@ -1198,7 +1198,8 @@ func (s *Server) handleCloudThumb(w http.ResponseWriter, r *http.Request) {
 		serveImage(w, b)
 		return
 	}
-	if _, err := os.Stat(base + ".none"); err == nil {
+	// Old permanent misses must not suppress the new video renderer.
+	if info, err := os.Stat(base + ".none-v2"); err == nil && time.Since(info.ModTime()) < 10*time.Minute {
 		writeErr(w, 404, "no thumbnail for this file")
 		return
 	}
@@ -1208,11 +1209,16 @@ func (s *Server) handleCloudThumb(w http.ResponseWriter, r *http.Request) {
 	case <-r.Context().Done():
 		return
 	}
+	// Another request may have filled the cache while this one waited.
+	if b, err := os.ReadFile(base + ".jpg"); err == nil {
+		serveImage(w, b)
+		return
+	}
 	b, err := s.makeThumb(r.Context(), a, it, thumbSize, 80)
 	if err != nil {
 		if errors.Is(err, cloud.ErrNoThumb) {
 			_ = os.MkdirAll(filepath.Dir(base), 0o755)
-			_ = os.WriteFile(base+".none", nil, 0o644)
+			_ = os.WriteFile(base+".none-v2", nil, 0o644)
 			writeErr(w, 404, "no thumbnail for this file")
 			return
 		}
@@ -1223,13 +1229,31 @@ func (s *Server) handleCloudThumb(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 502, "the thumbnail could not be made: "+err.Error())
 		return
 	}
-	_ = os.MkdirAll(filepath.Dir(base), 0o755)
-	_ = os.WriteFile(base+".jpg", b, 0o644)
+	cacheCloudThumb(base+".jpg", b)
 	serveImage(w, b)
 }
 
-// makeThumb asks the cloud for its rendering, or renders the image itself when the cloud has none.
+// Publish a complete JPEG atomically: a grid and player can request the same image together.
+func cacheCloudThumb(path string, b []byte) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return
+	}
+	file, err := os.CreateTemp(filepath.Dir(path), ".thumb-*")
+	if err != nil {
+		return
+	}
+	defer os.Remove(file.Name())
+	_, err = file.Write(b)
+	closeErr := file.Close()
+	if err == nil && closeErr == nil {
+		_ = os.Rename(file.Name(), path)
+	}
+}
+
+// makeThumb uses the cloud preview first, then renders a photo or video frame locally.
 func (s *Server) makeThumb(ctx context.Context, a *store.CloudAccount, it *store.CloudItem, size, quality int) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 35*time.Second)
+	defer cancel()
 	p, _, err := s.cloudProviderFor(ctx, a, nil)
 	if err != nil {
 		return nil, err
@@ -1237,17 +1261,24 @@ func (s *Server) makeThumb(ctx context.Context, a *store.CloudAccount, it *store
 	e := itemEntry(it)
 	res, err := p.Thumb(ctx, e, size)
 	if err == nil {
-		defer res.Body.Close()
-		// normalise the cloud's rendering to an upright JPEG of our size
-		if b, err := cloud.Render(res.Body, size, 0, quality); err == nil {
+		// Normalise the provider image; some providers return an unsupported icon for videos.
+		b, renderErr := cloud.Render(res.Body, size, 0, quality)
+		res.Body.Close()
+		if renderErr == nil {
 			return b, nil
 		}
-		return nil, errors.New("the cloud's thumbnail could not be read")
+		if !it.Video {
+			return nil, errors.New("the cloud's thumbnail could not be read")
+		}
+		err = cloud.ErrNoThumb
 	}
 	if !errors.Is(err, cloud.ErrNoThumb) {
 		return nil, err
 	}
-	if it.Video || !cloud.Decodable(it.Mime) || it.Size > cloud.MaxDecode {
+	if it.Video {
+		return cloud.RenderVideo(ctx, p, e, size, it.DurationMs)
+	}
+	if !cloud.Decodable(it.Mime) || it.Size > cloud.MaxDecode {
 		return nil, cloud.ErrNoThumb
 	}
 	res, err = p.Get(ctx, e, "")

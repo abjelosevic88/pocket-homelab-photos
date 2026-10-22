@@ -439,3 +439,7 @@ body.viewer-open pocket-ask-launcher:not([open]) { display: none; }
   to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) { .source-content { animation: none; } }
+
+/* Keep a useful placeholder under loading or unavailable cloud previews. */
+.cloud-thumbnail { position: relative; opacity: 0; }
+.cloud-thumbnail.loaded { opacity: 1; }

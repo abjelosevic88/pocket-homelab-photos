@@ -106,6 +106,8 @@ let cloudItems = [
     has_thumb: true, ...(account_id === 2 ? { web_url: 'https://drive.google.com/file/d/fixture' + i + '/view' } : {}),
   }
 })
+// A cloud video uses a JPEG poster even when its provider cannot preview the original.
+Object.assign(cloudItems[13], { video: true, mime: 'video/mp4', name: 'Cloud video.mp4', duration_ms: 12000 })
 const cloudPublic = i => { const { file, ...rest } = i; return rest }
 const cloudDto = a => {
   const list = cloudItems.filter(i => i.account_id === a.id)
@@ -659,6 +661,22 @@ try {
   await page.waitForFunction(n => document.querySelectorAll('.cloud-tile').length === n, ncItems.filter(i => i.lat != null).length)
   await page.getByRole('radio', { name: 'All', exact: true }).click()
   await page.waitForFunction(n => document.querySelectorAll('.cloud-tile').length === n, ncItems.length)
+  // Video tiles load real image previews and the player reuses the cached poster.
+  const cloudVideo = ncItems.find(i => i.video)
+  const videoTile = page.getByRole('button', { name: `Open ${cloudVideo.name}`, exact: true })
+  await videoTile.scrollIntoViewIfNeeded()
+  await videoTile.locator('img.loaded').waitFor()
+  assert.ok(await videoTile.locator('img').evaluate(img => img.naturalWidth > 0))
+  await videoTile.click()
+  assert.ok((await page.locator('.cloud-viewer video').getAttribute('poster')).endsWith(`/clouds/items/${cloudVideo.id}/thumb`))
+  await page.keyboard.press('Escape')
+  // A failed preview leaves an icon and filename, never an empty tile.
+  const failedTile = page.locator('.cloud-tile').first().locator('.tile-open')
+  await failedTile.scrollIntoViewIfNeeded()
+  await failedTile.locator('img').evaluate(img => { img.src = 'data:image/jpeg;base64,invalid' })
+  await failedTile.locator('img.broken').waitFor({ state: 'attached' })
+  assert.equal(await failedTile.locator('img').evaluate(img => getComputedStyle(img).opacity), '0')
+  assert.ok(await failedTile.locator('.tile-nothumb small').isVisible())
   // select two that are not in the library yet and import them
   const fresh = page.locator('.cloud-tile:not(.in-library) .tile-check')
   await fresh.nth(0).click(); await fresh.nth(1).click()

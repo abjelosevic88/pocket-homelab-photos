@@ -1,7 +1,7 @@
 // A light full-screen viewer for photos that live in a cloud: look, zoom, read where and when, import.
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { cloudOriginal, cloudPreview, clouds } from '../lib/api'
+import { cloudOriginal, cloudPreview, cloudThumb, clouds } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import { cloudKind, cloudPlace, cloudWhen, coords, isWebSafe } from '../lib/clouds'
 import { bytes, fmtDate, fmtTime } from '../lib/photos'
@@ -104,7 +104,7 @@ export function CloudViewer({ items, index, setIndex, onClose, onImported }: {
         <div ref={pz.stage} className={`viewer-stage${pz.zoomed ? ' zoomed' : ''}${pz.dragging ? ' dragging' : ''}`} {...pz.handlers}>
           {index > 0 && <button type="button" className="viewer-nav prev" aria-label="Previous photo" onClick={() => go(-1)}><Icon name="chevron-left" size={26} /></button>}
           {item && (item.video
-            ? <video key={item.id} src={cloudOriginal(item.id)} poster={item.has_thumb ? cloudPreview(item.id) : undefined} controls autoPlay playsInline onError={() => setError('This video could not be played here. Download the original instead.')} />
+            ? <video key={item.id} src={cloudOriginal(item.id)} poster={item.has_thumb ? cloudThumb(item.id) : undefined} controls autoPlay playsInline onError={() => setError('This video could not be played here. Download the original instead.')} />
             : <img key={item.id} ref={pz.img} className="pz" src={hi ? cloudOriginal(item.id) : cloudPreview(item.id)} alt={item.name} draggable={false} style={pz.style}
                 onError={() => { if (hi) setHi(false); else setError('No preview for this file. The original can still be downloaded.') }} />)}
           {index < items.length - 1 && <button type="button" className="viewer-nav next" aria-label="Next photo" onClick={() => go(1)}><Icon name="chevron-right" size={26} /></button>}

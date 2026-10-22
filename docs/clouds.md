@@ -88,7 +88,12 @@ duration and location (including Apple's `com.apple.quicktime.location.ISO6709`)
 
 **Thumbnails** come from the cloud when it renders them (Nextcloud previews, Drive, OneDrive and Dropbox cover HEIC
 and RAW); otherwise Photos renders JPEG, PNG, GIF and WebP itself, upright according to EXIF. They are cached in
-`DATA_DIR/cloud-thumbs`. HEIC on a plain WebDAV server or in an S3 bucket has no thumbnail; it can still be opened
+`DATA_DIR/cloud-thumbs`. When a cloud has no video preview (including Nextcloud without its Movie provider),
+Photos extracts a frame using FFmpeg, included in the Docker image. Native installations need `ffmpeg` on PATH.
+It reads authenticated byte ranges rather than downloading a whole video, with four concurrent thumbnail jobs,
+a 25-second decode deadline and a 64 MiB read budget per frame. Video players reuse the cached thumbnail as
+their poster. Missing provider previews retry after ten minutes; previous permanent misses are ignored.
+HEIC on a plain WebDAV server or in an S3 bucket has no thumbnail; it can still be opened
 and imported.
 
 **Place names** come from your Immich server's reverse geocoder (`/map/reverse-geocode`, the `map.search`

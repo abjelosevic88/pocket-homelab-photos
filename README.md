@@ -147,7 +147,7 @@ make test           # Go tests + type-check the UI
 make e2e            # browser suite + screenshots against the fixture library (no Immich needed)
 ```
 
-Go 1.26, Node 22. Stack: Go (chi, modernc SQLite), React 19 + Vite, no other runtime dependencies.
+Go 1.26, Node 22. Stack: Go (chi, modernc SQLite), React 19 + Vite. Install FFmpeg on PATH for cloud video thumbnails when the provider has no preview; the Docker image includes it.
 The fixture library is real photography from Unsplash — [credits](scripts/fixtures/README.md) and
 [attribution](docs/attribution.md).
 
