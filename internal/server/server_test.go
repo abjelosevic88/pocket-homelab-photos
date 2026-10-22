@@ -232,6 +232,25 @@ func TestLoginSessionIsRevokedOnLogout(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 }
+func TestUpdateMeRenamesAndChangesPassword(t *testing.T) {
+	s := testServer(t, "")
+	c := account(t, s, "a@example.com")
+	if w := request(s, "PUT", "/api/v1/auth/me", map[string]string{"name": "Ana"}, c); w.Code != 200 || !strings.Contains(w.Body.String(), `"Ana"`) {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w := request(s, "PUT", "/api/v1/auth/me", map[string]string{"new_password": "short"}, c); w.Code != 400 {
+		t.Fatal("short password accepted", w.Code)
+	}
+	if w := request(s, "PUT", "/api/v1/auth/me", map[string]string{"new_password": "long enough"}, c); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w := request(s, "PUT", "/api/v1/auth/me", map[string]string{"current_password": "wrong one", "new_password": "another one"}, c); w.Code != 400 {
+		t.Fatal("wrong current password accepted", w.Code)
+	}
+	if w := request(s, "PUT", "/api/v1/auth/me", map[string]string{"name": "x"}, nil); w.Code != 401 {
+		t.Fatal(w.Code)
+	}
+}
 func TestSourceImportUsesDelegatedReadAndKeepsSourceUnchanged(t *testing.T) {
 	for _, app := range []string{"files", "documents"} {
 		t.Run(app, func(t *testing.T) {

@@ -1,68 +1,117 @@
-# Pocket Photos
+<p align="center"><img src="web/public/favicon.svg" width="72" alt=""></p>
+<h1 align="center">Pocket Photos</h1>
+<p align="center">The photos of a household in one private place: a library that feels like Apple Photos or Google Photos, albums, people, memories and places, on top of the Immich server you already run — and the pictures sitting in Pocket Files and Pocket Documents, one tap away from the library.<br>One Go binary, one SQLite file, one volume.</p>
 
-Your photos, together. A private photo application for the Pocket homelab, backed by **Immich** and connected to **Pocket Files** and **Pocket Documents**.
+Pocket Photos is the everyday face of an [Immich](https://immich.app) server. Immich keeps doing what it is
+good at — storing originals, phone backup, face recognition, smart search — and Pocket Photos gives everyone
+on the box a calm, fast app in the same design as the other Pocket apps, signed in with Pocket Core. Each
+person brings their own Immich library (an API key, a password, or the credentials Core already holds for
+them); nobody — admins included — can browse somebody else's. Photos that ended up in a shared folder or
+were scanned into the document archive can be picked and copied into the library without touching the
+originals.
 
-Built with the same Go, SQLite, React 19, TypeScript and Vite stack as Pocket Calendar. The interface shares Calendar's design tokens, controls and stroke icons. One binary embeds the web UI; one persistent data directory holds accounts and encrypted connections.
+<p align="center"><img src="docs/screenshots/library.png" width="900" alt="All photos grouped by month: autumn in Sarajevo, a trip to Norway"></p>
 
-![Pocket Photos with an isolated illustration fixture library](docs/screenshots/library.png)
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/viewer.png" alt="The viewer with the details panel: date, camera, place and rating"></td>
+    <td width="50%"><img src="docs/screenshots/albums.png" alt="Albums: Autumn at home, Norway 2026, Iceland, Summer by the sea, Lisbon, New York at Christmas"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Swipe through, read the camera's details, add a description and stars.</sub></td>
+    <td align="center"><sub>Albums for the trips and the seasons, shared with a link.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/places.png" alt="Places: every photo with a location on a built-in world map"></td>
+    <td width="50%"><img src="docs/screenshots/sources.png" alt="Picking photos in Pocket Files to import into the library"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Every place on a map that ships with the app — no tiles from anyone.</sub></td>
+    <td align="center"><sub>Pick photos in Pocket Files or Pocket Documents; the originals stay put.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/people.png" alt="People recognised by Immich"></td>
+    <td width="50%"><img src="docs/screenshots/memories.png" alt="A memory from one year ago today"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>People Immich recognised, named in place.</sub></td>
+    <td align="center"><sub>On this day, a year ago.</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/phone-library.png" width="240" alt="The library on a phone">&nbsp;&nbsp;
+  <img src="docs/screenshots/phone-viewer.png" width="240" alt="The viewer on a phone">&nbsp;&nbsp;
+  <img src="docs/screenshots/library-dark.png" width="420" alt="Dark mode">
+</p>
+
+All screenshots use the fixture library — real photographs from Unsplash, made-up people and trips.
+[How to refresh them](docs/screenshots/README.md).
 
 ## What it does
 
-- Browse a date-grouped photo and video library with cursor pagination, sort order, grid density, favorites, recently added, archive and trash.
-- Search with Immich's natural-language search, filename or OCR text; filter by media type and date range.
-- Open full previews, play videos and Live Photo clips, navigate with keys or swipe, zoom, run a slideshow, view EXIF and location metadata, and download originals.
-- Edit descriptions and star ratings; apply non-destructive crop, rotate and mirror operations using Immich's edit API, or revert to the original.
-- Create, rename and delete albums; add and remove selected assets. Delete an album without deleting its photos.
-- Browse people, name recognized faces, revisit memories, and explore photo locations on a bundled world map that makes no third-party tile requests.
-- Create and revoke Immich sharing links with expiry, optional passwords, download controls and metadata controls.
-- Upload photos and videos with progress, cancellation, retry and duplicate reporting. Download a selection as a ZIP archive.
-- Browse your own and shared storage in Pocket Files, or image originals in Pocket Documents; preview and import selected originals into Immich. The source files stay unchanged. Immich handles duplicate detection.
-- Sign in locally or with Pocket Core / OIDC. Each user has their own encrypted Immich connection, or uses the personal service credentials already configured in Core. Other users cannot borrow that connection.
-- Use light/dark/system appearance, phone navigation, keyboard shortcuts and a web-app manifest.
+**The library**
+- Every photo and video grouped by day, month or year, newest or oldest first, a denser or roomier grid,
+  endless scrolling; favorites, videos, recently added, archive and recently deleted with restore.
+- Search the way Immich searches: in plain words ("dog on the beach"), by file name or by the text in the
+  picture, filtered by type and dates.
+- A full-screen viewer with swipe and keys, zoom, slideshow, videos and Live Photos, the camera's details and
+  a map; descriptions and star ratings; crop, rotate and mirror without losing the original; download.
 
-## Run
+**Albums, people, memories, places**
+- Create, rename and delete albums, add and remove a selection; deleting an album keeps its photos.
+- People recognised by Immich, named in place; *On this day* memories; every photo with a location on a world
+  map that ships with the app — no map tiles fetched from anyone.
+- Sharing links with an expiry, a password, and download and metadata switches; revoke them any time.
 
-```sh
-cp .env.example .env
-# Set IMMICH_URL and IMMICH_PUBLIC_URL, and optionally Pocket Core / initial admin settings.
-docker compose up -d
-```
+**Getting photos in**
+- Upload photos and videos by drag and drop with progress, cancel, retry and duplicate reporting; download a
+  selection as a zip.
+- Browse your home and shared folders in [Pocket Files](https://github.com/abjelosevic88/pocket-homelab-files)
+  and the images in [Pocket Documents](https://github.com/abjelosevic88/pocket-homelab-documents), preview
+  them and import the ones you pick. The source files stay where they are; Immich spots duplicates.
+- Phone camera backup stays with the Immich mobile app, against the same server.
 
-Open `http://localhost:8080`. Create the first account, then open **Settings → Your photo library**. Connect with your Immich API key or password, or let Pocket Core supply your connection. With Core configured, use **Continue with Pocket Core** for the same sign-in as the other Pocket apps.
+**With the other Pocket apps** (through [Pocket Core](https://github.com/abjelosevic88/pocket-homelab-core))
+- Sign in with Pocket Core, and use the Immich credentials Core already keeps for you.
+- Uses only `files:read` and `documents:read`; Core decides per person, and the source app checks folder,
+  share and document access on every read.
 
-Immich 3.3.5 is the tested API target. The library uses the structured search filters introduced in 3.2 and the non-destructive edits API. Older servers may not support all features. API key permissions are enforced by Immich; start with `user.read` plus the permissions for the features you want to use.
-
-For the other sources, Photos declares only `files:read` and `documents:read` in Pocket Core. The app never asks for write permission to those sources. Both the Core link and the person's access to the target app must be enabled.
-
-## Develop and verify
-
-```sh
-make web build
-DATA_DIR=./data IMMICH_URL=http://localhost:2283 ./pocket-photos
-```
-
-The web dev server (`cd web && npm run dev`) proxies API requests to Go on port 8080.
+## Run it
 
 ```sh
-make test
-# Isolated browser fixtures; never touches a real library:
-cd web && npx playwright install chromium && npm run preview -- --host 127.0.0.1 --port 18194
-# In another terminal, from the repository root:
-node scripts/e2e.mjs
+docker run -d --name pocket-photos -p 8080:8080 -v ./data:/data \
+  -e BASE_URL=https://photos.example.com -e TZ=Europe/Berlin \
+  -e IMMICH_URL=http://immich-server:2283 -e IMMICH_PUBLIC_URL=https://immich.example.com \
+  ghcr.io/abjelosevic88/pocket-homelab-photos:latest
 ```
 
-Go tests cover connection encryption and isolation, authentication, CSRF, redirect credential leaks, route restrictions, range streaming, and delegated original-preserving imports. The browser suite covers the viewer, edits to metadata, favorites, albums, protected sharing, search, both source imports, uploads, themes, and 1440/768/390/320px layouts. Screenshots above use fictional illustrated fixtures; no private library images are included in this repository.
+Open it, create the first account (or set `ADMIN_EMAIL` / `ADMIN_PASSWORD`) and connect your Immich library
+under **Settings → Your photo library**. See [docker-compose.yml](docker-compose.yml),
+[configuration](docs/configuration.md) and the [API](docs/api.md). Put it behind HTTPS and set
+`SECURE_COOKIES=true`. `IMMICH_PUBLIC_URL` is where sharing links open, so recipients need to reach it.
 
-CI builds the UI and binary and runs the checks. The release workflow publishes multi-architecture Docker images to GHCR and builds release binaries for tagged versions.
+On a Pocket Box, set `CORE_URL` and `CORE_REGISTRATION_KEY`: the app registers itself, people sign in with
+Pocket Core, and Pocket Files and Pocket Documents appear under *Sources* with nothing to configure.
 
-## Data and boundaries
+Immich 3.3 is the tested API target (structured search filters and the non-destructive edits API). Immich
+remains the system of record for originals, albums, faces, sharing and trash — back it up on its own.
+Pocket Photos' `./data` holds only accounts and each person's sealed Immich connection;
+`pocket-photos backup` writes a consistent copy of the database.
 
-Immich remains the system of record for originals, metadata, albums, faces, search, sharing and trash retention. Back it up independently. Pocket Photos does not reimplement Immich's storage or machine-learning pipeline.
+## Build
 
-Source imports are explicit copies selected in the browser, not background folder synchronization. Browser uploads/imports require the app to remain open. For automatic phone camera backup, use the Immich mobile app against the same server. ZIP selection downloads are assembled by Immich and buffered by the browser; download very large collections from Immich directly.
+```sh
+make web build      # React UI into web/dist, then the Go binary that embeds it
+make run            # no login, on :8080, against IMMICH_URL (default http://localhost:2283)
+make test           # Go tests + type-check the UI
+make e2e            # browser suite + screenshots against the fixture library (no Immich needed)
+```
 
-Core controls access to source apps at read/import time. Once an original is copied into a user's Immich library, it is an independent copy. Removing access to a source does not remove prior imports. Shared links open on `IMMICH_PUBLIC_URL`; recipients need network access to that Immich address, including tailnet access on a private deployment.
+Go 1.26, Node 22. Stack: Go (chi, modernc SQLite), React 19 + Vite, no other runtime dependencies.
+The fixture library is real photography from Unsplash — [credits](scripts/fixtures/README.md) and
+[attribution](docs/attribution.md).
 
-[Configuration](docs/configuration.md) · [API and architecture](docs/api.md) · [Deployment](docs/deployment.md) · [Attribution](docs/attribution.md)
+## License
 
-MIT license.
+MIT

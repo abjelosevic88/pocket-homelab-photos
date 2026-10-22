@@ -1,0 +1,637 @@
+[
+  {
+    "file": "park-bench-in-autumn.jpg",
+    "title": "Park bench in autumn",
+    "takenAt": "2026-10-19T16:42:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.8536,
+    "lon": 18.387,
+    "favorite": true,
+    "people": [],
+    "albums": [
+      "Autumn at home"
+    ],
+    "width": 1024,
+    "height": 680,
+    "credit": {
+      "author": "Rula Sibai",
+      "url": "https://unsplash.com/photos/nIkuMWT4Imc"
+    }
+  },
+  {
+    "file": "foggy-trail-on-trebevic.jpg",
+    "title": "Foggy trail on Trebević",
+    "takenAt": "2026-10-18T09:15:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.837,
+    "lon": 18.447,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Autumn at home"
+    ],
+    "width": 1024,
+    "height": 599,
+    "credit": {
+      "author": "Sebastian Unrau",
+      "url": "https://unsplash.com/photos/CoD2Q92UaEg"
+    }
+  },
+  {
+    "file": "saturday-cappuccino.jpg",
+    "title": "Saturday cappuccino",
+    "takenAt": "2026-10-18T11:05:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.859,
+    "lon": 18.431,
+    "favorite": false,
+    "people": [],
+    "albums": [],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Carli Jean",
+      "url": "https://unsplash.com/photos/UWRqlJcDCXA"
+    }
+  },
+  {
+    "file": "sara-and-mia.jpg",
+    "title": "Sara and Mia",
+    "takenAt": "2026-10-17T17:30:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.8563,
+    "lon": 18.4131,
+    "favorite": true,
+    "people": [
+      "Sara",
+      "Mia"
+    ],
+    "albums": [
+      "Autumn at home"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "London Scout",
+      "url": "https://unsplash.com/photos/4-gFGb12hFA"
+    }
+  },
+  {
+    "file": "bruno-under-the-blanket.jpg",
+    "title": "Bruno under the blanket",
+    "takenAt": "2026-10-17T08:10:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.848,
+    "lon": 18.374,
+    "favorite": false,
+    "people": [],
+    "albums": [],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Matthew Wiebe",
+      "url": "https://unsplash.com/photos/2Ts5HnA67k8"
+    }
+  },
+  {
+    "file": "the-new-camera.jpg",
+    "title": "The new camera",
+    "takenAt": "2026-10-12T15:20:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.841,
+    "lon": 18.356,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Autumn at home"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Benjamin Combs",
+      "url": "https://unsplash.com/photos/hiAdjnXZxl8"
+    }
+  },
+  {
+    "file": "leaves-on-the-porch.jpg",
+    "title": "Leaves on the porch",
+    "takenAt": "2026-10-12T15:02:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.848,
+    "lon": 18.374,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Autumn at home"
+    ],
+    "width": 1024,
+    "height": 687,
+    "credit": {
+      "author": "petradr",
+      "url": "https://unsplash.com/photos/WqK_xV_hbug"
+    }
+  },
+  {
+    "file": "market-strawberries.jpg",
+    "title": "Market strawberries",
+    "takenAt": "2026-10-11T10:40:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.8588,
+    "lon": 18.4271,
+    "favorite": false,
+    "people": [],
+    "albums": [],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "veeterzy",
+      "url": "https://unsplash.com/photos/OJJIaFZOeX4"
+    }
+  },
+  {
+    "file": "sunday-lunch.jpg",
+    "title": "Sunday lunch",
+    "takenAt": "2026-10-11T13:25:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.848,
+    "lon": 18.374,
+    "favorite": false,
+    "people": [],
+    "albums": [],
+    "width": 1024,
+    "height": 680,
+    "credit": {
+      "author": "Webvilla",
+      "url": "https://unsplash.com/photos/hv1MrBzGGNY"
+    }
+  },
+  {
+    "file": "preikestolen.jpg",
+    "title": "Preikestolen",
+    "takenAt": "2026-09-14T12:30:00+02:00",
+    "city": "Forsand",
+    "country": "Norway",
+    "lat": 58.9864,
+    "lon": 6.1903,
+    "favorite": true,
+    "people": [],
+    "albums": [
+      "Norway 2026"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Alexey Topolyanskiy",
+      "url": "https://unsplash.com/photos/-oWyJoSqBRM"
+    }
+  },
+  {
+    "file": "lysefjord-from-the-ferry.jpg",
+    "title": "Lysefjord from the ferry",
+    "takenAt": "2026-09-13T10:05:00+02:00",
+    "city": "Stavanger",
+    "country": "Norway",
+    "lat": 59.02,
+    "lon": 6.21,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Norway 2026"
+    ],
+    "width": 1024,
+    "height": 768,
+    "credit": {
+      "author": "Jeff Sheldon",
+      "url": "https://unsplash.com/photos/oOFrXiz8-0A"
+    }
+  },
+  {
+    "file": "camp-below-the-pass.jpg",
+    "title": "Camp below the pass",
+    "takenAt": "2026-09-15T07:45:00+02:00",
+    "city": "Sirdal",
+    "country": "Norway",
+    "lat": 58.88,
+    "lon": 6.84,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Norway 2026"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Wolfgang Lutz",
+      "url": "https://unsplash.com/photos/yOujaSETXlo"
+    }
+  },
+  {
+    "file": "on-the-lake-at-lysebotn.jpg",
+    "title": "On the lake at Lysebotn",
+    "takenAt": "2026-09-16T18:20:00+02:00",
+    "city": "Lysebotn",
+    "country": "Norway",
+    "lat": 59.055,
+    "lon": 6.648,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Norway 2026"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Roberto Nickson",
+      "url": "https://unsplash.com/photos/7BjmDICVloE"
+    }
+  },
+  {
+    "file": "seljalandsfoss.jpg",
+    "title": "Seljalandsfoss",
+    "takenAt": "2026-08-03T21:10:00+00:00",
+    "city": "Seljaland",
+    "country": "Iceland",
+    "lat": 63.6156,
+    "lon": -19.9886,
+    "favorite": true,
+    "people": [],
+    "albums": [
+      "Iceland"
+    ],
+    "width": 1024,
+    "height": 768,
+    "credit": {
+      "author": "Jeff Sheldon",
+      "url": "https://unsplash.com/photos/SdSc4sWVMRU"
+    }
+  },
+  {
+    "file": "reynisfjara.jpg",
+    "title": "Reynisfjara",
+    "takenAt": "2026-08-04T10:30:00+00:00",
+    "city": "Vík",
+    "country": "Iceland",
+    "lat": 63.4044,
+    "lon": -19.045,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Iceland"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Annie Spratt",
+      "url": "https://unsplash.com/photos/x8R2oSWZRSE"
+    }
+  },
+  {
+    "file": "the-plane-on-solheimasandur.jpg",
+    "title": "The plane on Sólheimasandur",
+    "takenAt": "2026-08-04T15:45:00+00:00",
+    "city": "Sólheimasandur",
+    "country": "Iceland",
+    "lat": 63.4591,
+    "lon": -19.3647,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Iceland"
+    ],
+    "width": 1024,
+    "height": 768,
+    "credit": {
+      "author": "Jeff Sheldon",
+      "url": "https://unsplash.com/photos/uWwN03Mg4Wg"
+    }
+  },
+  {
+    "file": "skogafoss.jpg",
+    "title": "Skógafoss",
+    "takenAt": "2026-08-05T09:20:00+00:00",
+    "city": "Skógar",
+    "country": "Iceland",
+    "lat": 63.5321,
+    "lon": -19.5114,
+    "favorite": false,
+    "video": true,
+    "duration": "0:00:24.000",
+    "people": [],
+    "albums": [
+      "Iceland"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Jared Erondu",
+      "url": "https://unsplash.com/photos/j4PaE7E2_Ws"
+    }
+  },
+  {
+    "file": "blue-lagoon.jpg",
+    "title": "Blue Lagoon",
+    "takenAt": "2026-08-06T19:00:00+00:00",
+    "city": "Grindavík",
+    "country": "Iceland",
+    "lat": 63.8804,
+    "lon": -22.4495,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Iceland"
+    ],
+    "width": 1024,
+    "height": 1294,
+    "credit": {
+      "author": "Jeff Sheldon",
+      "url": "https://unsplash.com/photos/jTeQavJjBDs"
+    }
+  },
+  {
+    "file": "coast-road-above-makarska.jpg",
+    "title": "Coast road above Makarska",
+    "takenAt": "2026-07-10T18:40:00+02:00",
+    "city": "Makarska",
+    "country": "Croatia",
+    "lat": 43.297,
+    "lon": 17.017,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Summer by the sea"
+    ],
+    "width": 1024,
+    "height": 684,
+    "credit": {
+      "author": "Stefan Kunze",
+      "url": "https://unsplash.com/photos/_SmZSuZwkHg"
+    }
+  },
+  {
+    "file": "evening-walk-on-the-beach.jpg",
+    "title": "Evening walk on the beach",
+    "takenAt": "2026-07-11T20:15:00+02:00",
+    "city": "Makarska",
+    "country": "Croatia",
+    "lat": 43.293,
+    "lon": 17.02,
+    "favorite": true,
+    "people": [],
+    "albums": [
+      "Summer by the sea"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Danielle MacInnes",
+      "url": "https://unsplash.com/photos/1DkWWN1dr-s"
+    }
+  },
+  {
+    "file": "cycling-to-the-beach.jpg",
+    "title": "Cycling to the beach",
+    "takenAt": "2026-07-12T09:50:00+02:00",
+    "city": "Tučepi",
+    "country": "Croatia",
+    "lat": 43.27,
+    "lon": 17.056,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Summer by the sea"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Abigail  Keenan",
+      "url": "https://unsplash.com/photos/8jqna7aA-vs"
+    }
+  },
+  {
+    "file": "lighthouse-on-the-cliffs.jpg",
+    "title": "Lighthouse on the cliffs",
+    "takenAt": "2026-07-13T17:05:00+02:00",
+    "city": "Hvar",
+    "country": "Croatia",
+    "lat": 43.173,
+    "lon": 16.442,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Summer by the sea"
+    ],
+    "width": 1024,
+    "height": 682,
+    "credit": {
+      "author": "Nick Diamantidis",
+      "url": "https://unsplash.com/photos/jkPKQWK1sKU"
+    }
+  },
+  {
+    "file": "tram-28.jpg",
+    "title": "Tram 28",
+    "takenAt": "2026-05-02T10:15:00+01:00",
+    "city": "Lisbon",
+    "country": "Portugal",
+    "lat": 38.7139,
+    "lon": -9.1334,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Lisbon"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "POR7O",
+      "url": "https://unsplash.com/photos/mS1pAG_bi5Y"
+    }
+  },
+  {
+    "file": "alfama-down-to-the-river.jpg",
+    "title": "Alfama, down to the river",
+    "takenAt": "2026-05-02T11:40:00+01:00",
+    "city": "Lisbon",
+    "country": "Portugal",
+    "lat": 38.7115,
+    "lon": -9.13,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "Lisbon"
+    ],
+    "width": 1024,
+    "height": 1536,
+    "credit": {
+      "author": "Bertrand Zuchuat",
+      "url": "https://unsplash.com/photos/Uax2bg5EizU"
+    }
+  },
+  {
+    "file": "lena-in-the-sun.jpg",
+    "title": "Lena in the sun",
+    "takenAt": "2026-05-03T16:30:00+01:00",
+    "city": "Lisbon",
+    "country": "Portugal",
+    "lat": 38.6916,
+    "lon": -9.216,
+    "favorite": false,
+    "people": [
+      "Lena"
+    ],
+    "albums": [
+      "Lisbon"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Alexander Shustov",
+      "url": "https://unsplash.com/photos/AHBiSKaENwc"
+    }
+  },
+  {
+    "file": "eiffel-tower-in-march.jpg",
+    "title": "Eiffel Tower in March",
+    "takenAt": "2026-03-21T17:50:00+01:00",
+    "city": "Paris",
+    "country": "France",
+    "lat": 48.8584,
+    "lon": 2.2945,
+    "favorite": false,
+    "people": [],
+    "albums": [],
+    "width": 1024,
+    "height": 1024,
+    "credit": {
+      "author": "Laura Liberal",
+      "url": "https://unsplash.com/photos/_py5wlZTI2c"
+    }
+  },
+  {
+    "file": "midtown-from-top-of-the-rock.jpg",
+    "title": "Midtown from Top of the Rock",
+    "takenAt": "2025-12-28T15:30:00-05:00",
+    "city": "New York",
+    "country": "United States",
+    "lat": 40.7593,
+    "lon": -73.9794,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "New York at Christmas"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Benjamin Combs",
+      "url": "https://unsplash.com/photos/bLppF5sbXPo"
+    }
+  },
+  {
+    "file": "yellow-cabs-on-fifth.jpg",
+    "title": "Yellow cabs on Fifth",
+    "takenAt": "2025-12-27T12:10:00-05:00",
+    "city": "New York",
+    "country": "United States",
+    "lat": 40.7536,
+    "lon": -73.9832,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "New York at Christmas"
+    ],
+    "width": 1024,
+    "height": 681,
+    "credit": {
+      "author": "Andrew Ruiz",
+      "url": "https://unsplash.com/photos/bI2j1olMXUA"
+    }
+  },
+  {
+    "file": "lady-liberty.jpg",
+    "title": "Lady Liberty",
+    "takenAt": "2025-12-29T11:00:00-05:00",
+    "city": "New York",
+    "country": "United States",
+    "lat": 40.6892,
+    "lon": -74.0445,
+    "favorite": false,
+    "people": [],
+    "albums": [
+      "New York at Christmas"
+    ],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Anthony DELANOIX",
+      "url": "https://unsplash.com/photos/hv5pLutRkCI"
+    }
+  },
+  {
+    "file": "bruno-s-first-autumn.jpg",
+    "title": "Bruno's first autumn",
+    "takenAt": "2025-10-22T09:30:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.848,
+    "lon": 18.374,
+    "favorite": true,
+    "people": [],
+    "albums": [],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "Matthew Wiebe",
+      "url": "https://unsplash.com/photos/U5rMrSI7Pn4"
+    }
+  },
+  {
+    "file": "ana.jpg",
+    "title": "Ana",
+    "takenAt": "2025-10-22T16:45:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.859,
+    "lon": 18.431,
+    "favorite": false,
+    "people": [
+      "Ana"
+    ],
+    "albums": [],
+    "width": 1024,
+    "height": 1536,
+    "credit": {
+      "author": "Roksolana Zasiadko",
+      "url": "https://unsplash.com/photos/LyeduBb2Auk"
+    }
+  },
+  {
+    "file": "sara-reading.jpg",
+    "title": "Sara reading",
+    "takenAt": "2025-10-21T19:20:00+02:00",
+    "city": "Sarajevo",
+    "country": "Bosnia and Herzegovina",
+    "lat": 43.848,
+    "lon": 18.374,
+    "favorite": false,
+    "people": [
+      "Sara"
+    ],
+    "albums": [],
+    "width": 1024,
+    "height": 683,
+    "credit": {
+      "author": "hieu le",
+      "url": "https://unsplash.com/photos/SrkuyPb3aUk"
+    }
+  }
+]

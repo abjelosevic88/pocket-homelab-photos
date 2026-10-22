@@ -127,6 +127,7 @@ func (s *Server) Router() http.Handler {
 	r.Get("/pocket-ask.js", s.core.AskWidget("photos"))
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/auth/status", s.handleAuthStatus)
+		r.Post("/client-error", s.handleClientError)
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/setup", s.handleSetup)
 		r.Get("/auth/oidc/start", s.handleOIDCStart)
@@ -134,6 +135,7 @@ func (s *Server) Router() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAuth)
 			r.Get("/auth/me", s.handleMe)
+			r.Put("/auth/me", s.handleUpdateMe)
 			r.Post("/auth/logout", s.handleLogout)
 			r.Get("/connection", s.handleConnection)
 			r.Put("/connection", s.handleConnect)
@@ -222,4 +224,21 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = "/"
 	}
 	http.FileServerFS(s.webFS).ServeHTTP(w, r)
+}
+
+// handleClientError writes a crash of the web app into the server's log.
+func (s *Server) handleClientError(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Message, Stack, Component, URL, Where, Agent string
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&in); err != nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	who := ""
+	if u, err := s.resolveUser(r); err == nil && u != nil {
+		who = u.Email
+	}
+	s.log.Warn("web app crashed", "user", who, "where", in.Where, "url", in.URL, "message", in.Message, "stack", in.Stack, "component", in.Component, "agent", in.Agent)
+	w.WriteHeader(http.StatusNoContent)
 }

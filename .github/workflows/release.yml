@@ -21,12 +21,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: ver
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            echo "v=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          else
-            echo "v=$(node -p 'JSON.parse(require("fs").readFileSync("web/package.json")).version')" >> "$GITHUB_OUTPUT"
-          fi
+        run: echo "v=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@v5
         with:

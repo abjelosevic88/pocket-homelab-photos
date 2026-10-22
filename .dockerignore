@@ -11,3 +11,4 @@ deploy
 !.env.example
 /pocket-photos
 dist
+scripts/fixtures
