@@ -469,8 +469,8 @@ try {
   assert.ok(fit.i[0] >= fit.s[0] - 1 && fit.i[1] <= fit.s[1] + 1 && fit.i[2] >= fit.s[2] - 1 && fit.i[3] <= fit.s[3] + 1, `portrait photo overflows the viewer: ${JSON.stringify(fit)}`)
   await btn('Close viewer').click()
 
-  // zoom: double-click keeps the spot under the cursor, drag pans without opening gaps, ctrl+wheel and keys zoom,
-  // Escape first returns to fit, a second double-click fits again
+  // zoom: one click keeps the spot under the cursor, drag pans without opening gaps, ctrl+wheel and keys zoom,
+  // Escape first returns to fit, another click fits again
   const wide = assets.find(a => a.type === 'IMAGE' && a.width > a.height)
   await openTile(wide)
   if (await page.locator('.viewer-info').isVisible()) await btn('Show photo information').click()
@@ -489,11 +489,11 @@ try {
   const px = g0.c.left + g0.c.width * 0.25, py = g0.c.top + g0.c.height * 0.3
   const frac = g => [(px - g.r.left) / g.r.width, (py - g.r.top) / g.r.height]
   const f0 = frac(g0)
-  await page.mouse.dblclick(px, py)
+  await page.mouse.click(px, py)
   await page.locator('.viewer-stage.zoomed').waitFor()
   await settleZoom()
   let g1 = await geom()
-  assert.ok(g1.r.width > g0.r.width * 1.4, 'double-click zooms in')
+  assert.ok(g1.r.width > g0.r.width * 1.4, 'one click zooms in')
   const f1 = frac(g1)
   assert.ok(Math.abs(f1[0] - f0[0]) < 0.01 && Math.abs(f1[1] - f0[1]) < 0.01, `the clicked spot stays under the cursor: ${f0} → ${f1}`)
   await page.locator('.zoom-pct').waitFor()
@@ -517,10 +517,29 @@ try {
   assert.ok((await geom()).r.width > sKey * 1.2, 'ctrl+wheel zooms in')
   await page.keyboard.press('0'); await settleZoom()
   assert.equal(await page.locator('.viewer-stage.zoomed').count(), 0)
-  // double-click in, double-click out
-  await page.mouse.dblclick(px, py); await page.locator('.viewer-stage.zoomed').waitFor(); await settleZoom()
+  // One click in, one click out; double-clicking must not undo the first click.
+  await page.mouse.click(px, py); await page.locator('.viewer-stage.zoomed').waitFor(); await settleZoom()
+  await page.mouse.click(px, py); await settleZoom()
+  assert.equal(await page.locator('.viewer-stage.zoomed').count(), 0, 'second click fits again')
   await page.mouse.dblclick(px, py); await settleZoom()
-  assert.equal(await page.locator('.viewer-stage.zoomed').count(), 0, 'second double-click fits again')
+  assert.equal(await page.locator('.viewer-stage.zoomed').count(), 1, 'double-click keeps the first zoom')
+  await btn('Fit photo').click(); await settleZoom()
+  assert.equal(await page.locator('.viewer-stage.zoomed').count(), 0, 'zoom control does not also toggle the stage')
+  // Real touch events: a tap zooms, a drag pans, and lifting pinch fingers is not a tap.
+  const touchSession = await page.context().newCDPSession(page)
+  const touch = (type, points) => touchSession.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([id, x, y]) => ({ id, x, y })) })
+  await touch('touchStart', [[1, px, py]]); await touch('touchEnd', []); await settleZoom()
+  assert.equal(await page.locator('.viewer-stage.zoomed').count(), 1, 'single tap zooms')
+  await touch('touchStart', [[1, px, py]]); await touch('touchEnd', []); await settleZoom()
+  assert.equal(await page.locator('.viewer-stage.zoomed').count(), 0, 'another tap fits')
+  await touch('touchStart', [[1, px, py], [2, px + 100, py]])
+  await touch('touchMove', [[1, px - 30, py], [2, px + 160, py]])
+  await touch('touchEnd', [[2, px + 160, py]])
+  await touch('touchEnd', []); await settleZoom()
+  assert.equal(await page.locator('.viewer-stage.zoomed').count(), 1, 'pinch release preserves zoom')
+  await touchSession.detach()
+  await page.keyboard.press('0'); await settleZoom()
+
   g0 = await geom()
   await btn('Close viewer').click()
 
@@ -727,6 +746,12 @@ try {
   const located = ncItems.find(i => i.lat != null && i.taken_at)
   await page.getByRole('button', { name: `Open ${located.name}`, exact: true }).click()
   await page.locator('.cloud-viewer').waitFor()
+  await page.locator('.cloud-viewer .viewer-stage img').evaluate(img => img.decode())
+  await settleZoom()
+  await page.locator('.cloud-viewer .viewer-stage img').click()
+  await page.locator('.cloud-viewer .viewer-stage.zoomed').waitFor(); await settleZoom()
+  await page.locator('.cloud-viewer .viewer-stage img').click(); await settleZoom()
+  assert.equal(await page.locator('.cloud-viewer .viewer-stage.zoomed').count(), 0, 'cloud photos also toggle on one click')
   await askPhoto('/clouds/items/' + located.id + '/preview')
   await page.setViewportSize({ width: 390, height: 844 })
   await askPhoto('/clouds/items/' + located.id + '/preview')

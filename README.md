@@ -63,7 +63,7 @@ All screenshots use the fixture library — real photographs from Unsplash, made
   endless scrolling; favorites, videos, recently added, archive and recently deleted with restore.
 - Search the way Immich searches: in plain words ("dog on the beach"), by file name or by the text in the
   picture, filtered by type and dates.
-- A full-screen viewer with swipe and keys, zoom, slideshow, videos and Live Photos, the camera's details and
+- A full-screen viewer with swipe and keys, single-click/tap zoom, slideshow, videos and Live Photos, the camera's details and
   a map; descriptions and star ratings; crop, rotate and mirror without losing the original; download.
 
 **Albums, people, memories, places**

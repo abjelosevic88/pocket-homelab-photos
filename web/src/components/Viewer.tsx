@@ -182,7 +182,7 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
             <div className="viewer-float">
               {detail.livePhotoVideoId && <button type="button" className="vpill" onClick={() => setLive(!live)}><Icon name="live" size={15} />{live ? 'Still photo' : 'Play Live Photo'}</button>}
               {zoomable && pz.zoomed && <button type="button" className="vpill zoom-pct" title="Show actual pixels (1)" onClick={pz.zoomActual}>{pz.percent}%</button>}
-              {detail.type !== 'VIDEO' && <button type="button" className="vbtn" disabled={!zoomable} aria-label={pz.zoomed ? 'Fit photo' : 'Zoom photo'} title={pz.zoomed ? 'Fit (0)' : 'Zoom (double-click, + / −)'} onClick={pz.toggle}><Icon name={pz.zoomed ? 'zoom-out' : 'zoom-in'} size={18} /></button>}
+              {detail.type !== 'VIDEO' && <button type="button" className="vbtn" disabled={!zoomable} aria-label={pz.zoomed ? 'Fit photo' : 'Zoom photo'} title={pz.zoomed ? 'Fit (0)' : 'Zoom (click photo, + / −)'} onClick={pz.toggle}><Icon name={pz.zoomed ? 'zoom-out' : 'zoom-in'} size={18} /></button>}
               <button type="button" className="vbtn" aria-label="Full screen" title="Full screen" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else ref.current?.requestFullscreen().catch(() => {}) }}><Icon name="fullscreen" size={18} /></button>
             </div>
           )}

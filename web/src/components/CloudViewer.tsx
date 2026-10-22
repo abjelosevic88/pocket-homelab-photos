@@ -111,7 +111,7 @@ export function CloudViewer({ items, index, setIndex, onClose, onImported }: {
           {zoomable && (
             <div className="viewer-float">
               {pz.zoomed && <button type="button" className="vpill zoom-pct" title="Show actual pixels (1)" onClick={pz.zoomActual}>{pz.percent}%</button>}
-              <button type="button" className="vbtn" aria-label={pz.zoomed ? 'Fit photo' : 'Zoom photo'} title={pz.zoomed ? 'Fit (0)' : 'Zoom (double-click, + / −)'} onClick={pz.toggle}><Icon name={pz.zoomed ? 'zoom-out' : 'zoom-in'} size={18} /></button>
+              <button type="button" className="vbtn" aria-label={pz.zoomed ? 'Fit photo' : 'Zoom photo'} title={pz.zoomed ? 'Fit (0)' : 'Zoom (click photo, + / −)'} onClick={pz.toggle}><Icon name={pz.zoomed ? 'zoom-out' : 'zoom-in'} size={18} /></button>
             </div>
           )}
         </div>

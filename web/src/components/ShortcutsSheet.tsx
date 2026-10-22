@@ -20,7 +20,7 @@ export function ShortcutsSheet({ onClose }: { onClose: () => void }) {
           </section>
         ))}
       </div>
-      <p className="muted small mt">On touch screens: swipe left or right in the viewer, double-tap to zoom.</p>
+      <p className="muted small mt">On touch screens: swipe left or right in the viewer, tap once to zoom, tap again to fit.</p>
     </Modal>
   )
 }

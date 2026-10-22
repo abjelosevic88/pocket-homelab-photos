@@ -1,4 +1,4 @@
-// Zoom and pan for the viewer's photo: double-click / double-tap into the spot you pointed at, pinch and
+// Zoom and pan for the viewer's photo: click / tap into the spot you pointed at, pinch and
 // ctrl/⌘-wheel around the cursor, drag or scroll to pan, edges kept on screen, a sharper image once the
 // preview runs out of pixels. Scale 1 is "fit"; the image box fills the stage and object-fit keeps the
 // photo's aspect, so the content rectangle is worked out from the aspect ratio.
@@ -22,7 +22,7 @@ export function usePanZoom({ width, height, enabled, onSwipe }: {
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const gesture = useRef<{ x: number; y: number; d: number; view: View; moved: boolean; type: string } | null>(null)
   const lastTap = useRef({ t: 0, x: 0, y: 0 })
-  const lastType = useRef('mouse')
+  const multiPointer = useRef(false)
 
   // Geometry: the image box (layout position, unaffected by the transform) and the photo inside it.
   const geo = useCallback(() => {
@@ -65,7 +65,7 @@ export function usePanZoom({ width, height, enabled, onSwipe }: {
 
   const center = () => { const r = stage.current?.getBoundingClientRect(); return r ? [r.left + r.width / 2, r.top + r.height / 2] as const : [0, 0] as const }
 
-  // Double-click / double-tap: into the spot you pointed at (pulled onto the photo), or back to fit.
+  // Click / tap: into the spot you pointed at (pulled onto the photo), or back to fit.
   const toggleAt = useCallback((x: number, y: number) => {
     if (!enabled) return
     if (v.current.s > 1.001) { setView(FIT); return }
@@ -121,9 +121,10 @@ export function usePanZoom({ width, height, enabled, onSwipe }: {
 
   const handlers = {
     onPointerDown: (e: React.PointerEvent) => {
-      lastType.current = e.pointerType
-      if (!enabled || (e.target as HTMLElement).closest('button,a,video')) return
+      if (!enabled || (e.target as HTMLElement).closest('button,a,video,input,textarea,select')) return
       if (e.pointerType === 'mouse' && e.button !== 0) return
+      if (!pointers.current.size) multiPointer.current = false
+      else multiPointer.current = true
       pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
       ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
       startGesture(e.pointerType)
@@ -151,6 +152,7 @@ export function usePanZoom({ width, height, enabled, onSwipe }: {
       }
     },
     onPointerUp: (e: React.PointerEvent) => {
+      if (!pointers.current.has(e.pointerId)) return
       const g = gesture.current
       const was = pointers.current.size
       pointers.current.delete(e.pointerId)
@@ -158,19 +160,18 @@ export function usePanZoom({ width, height, enabled, onSwipe }: {
       if (!g) return
       if (pointers.current.size) { startGesture(g.type); return }   // one finger of a pinch lifted: keep panning
       gesture.current = null
-      if (was > 1 || g.type !== 'touch') return
+      if (was > 1 || multiPointer.current) return
       const dx = e.clientX - g.x, dy = e.clientY - g.y
       if (!g.moved) {
         const now = Date.now(), lt = lastTap.current
-        if (now - lt.t < TAP_MS && Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < TAP_PX) { lastTap.current = { t: 0, x: 0, y: 0 }; toggleAt(e.clientX, e.clientY) }
-        else lastTap.current = { t: now, x: e.clientX, y: e.clientY }
-      } else if (g.view.s <= 1.001 && Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) onSwipe(dx < 0 ? 1 : -1)
+        // Act on the first click/tap; ignore a rapid second one so an habitual
+        // double-click does not immediately undo the zoom.
+        if (now - lt.t < TAP_MS && Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < TAP_PX) return
+        lastTap.current = { t: now, x: e.clientX, y: e.clientY }
+        toggleAt(e.clientX, e.clientY)
+      } else if (g.type === 'touch' && g.view.s <= 1.001 && Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) onSwipe(dx < 0 ? 1 : -1)
     },
-    onPointerCancel: (e: React.PointerEvent) => { pointers.current.delete(e.pointerId); gesture.current = null; setDragging(false) },
-    onDoubleClick: (e: React.MouseEvent) => {
-      if (lastType.current === 'touch' || (e.target as HTMLElement).closest('button,a,video')) return
-      toggleAt(e.clientX, e.clientY)
-    },
+    onPointerCancel: (e: React.PointerEvent) => { pointers.current.delete(e.pointerId); multiPointer.current = true; gesture.current = null; setDragging(false) },
   }
 
   const zoomed = view.s > 1.001
