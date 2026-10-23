@@ -1,6 +1,13 @@
 <p align="center"><img src="web/public/favicon.svg" width="72" alt=""></p>
 <h1 align="center">Pocket Photos</h1>
 <p align="center">The photos of a household in one private place: a library that feels like Apple Photos or Google Photos, albums, people, memories and places, on top of the Immich server you already run — and the pictures sitting in Pocket Files and Pocket Documents, one tap away from the library.<br>One Go binary, one SQLite file, one volume.</p>
+<p align="center">
+  <a href="https://github.com/abjelosevic88/pocket-homelab-photos/actions"><img src="https://github.com/abjelosevic88/pocket-homelab-photos/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/abjelosevic88/pocket-homelab-photos/pkgs/container/pocket-homelab-photos"><img src="https://img.shields.io/badge/ghcr.io-amd64%20%7C%20arm64-blue" alt="image"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
+</p>
+
+---
 
 Pocket Photos is the everyday face of an [Immich](https://immich.app) server. Immich keeps doing what it is
 good at — storing originals, phone backup, face recognition, smart search — and Pocket Photos gives everyone
