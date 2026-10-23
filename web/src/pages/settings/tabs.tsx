@@ -8,7 +8,7 @@ import { AddCloud } from '../../components/AddCloud'
 import { SOURCES } from '../../lib/nav'
 import { bytes, plural } from '../../lib/photos'
 import { Icon } from '../../components/icons'
-import { Avatar, Confirm, Field, Modal, Segmented, SettingRow, Spinner, errMsg, useToast } from '../../components/ui'
+import { Avatar, Confirm, Field, Modal, NeedsCore, Segmented, SettingRow, Spinner, errMsg, useToast } from '../../components/ui'
 
 export function Section({ title, sub, actions, children }: { title: React.ReactNode; sub?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -113,10 +113,11 @@ export function LibraryTab() {
             )}
             {err && <div className="callout danger"><Icon name="alert" size={15} /><span>{err}</span></div>}
             <div className="row"><button className="btn primary" disabled={busy}>{busy ? 'Connecting…' : 'Connect Immich'}</button></div>
+            {!c.core && <NeedsCore />}
           </form>
         </Section>
       ) : !c?.connected && c && (
-        <div className="callout info"><Icon name="info" size={15} /><span>Use the Immich connection in Pocket Core, or set <code>IMMICH_URL</code> on the Photos server to sign in directly.</span></div>
+        <div className="stack tight"><div className="callout info"><Icon name="info" size={15} /><span>{c.core ? 'Use the Immich connection in Pocket Core, or set ' : 'Set '}<code>IMMICH_URL</code> on the Photos server to sign in directly.</span></div>{!c.core && <NeedsCore />}</div>
       )}
       <p className="muted small">For automatic camera backup from your phone, use the Immich app with the same account — the photos show up here.</p>
     </div>
@@ -124,7 +125,9 @@ export function LibraryTab() {
 }
 
 export function SourcesTab() {
-  const { clouds, reloadClouds } = useApp()
+  const { clouds, reloadClouds, status } = useApp()
+  // Pocket Files and Pocket Documents are reached only through Pocket Core.
+  const noCore = !!status && !status.core_configured
   const { toast } = useToast()
   const [sp, setSp] = useSearchParams()
   const [adding, setAdding] = useState(false)
@@ -176,13 +179,14 @@ export function SourcesTab() {
       <Section title="Your Pocket apps" sub="Pocket Core decides what Photos may read, with your own permissions. Manage it in Core → Apps acting for me.">
         <div className="set-list">
           {SOURCES.map(s => (
-            <div key={s.id} className="set-list-row">
+            <div key={s.id} className={`set-list-row ${noCore ? 'needs-core-row' : ''}`} aria-disabled={noCore || undefined}>
               <img className="source-app-icon" src={s.appIcon} alt="" width={36} height={36} />
               <div className="grow"><div className="acct-name">{s.label}</div><div className="muted small">{s.desc} Read only.</div></div>
-              <Link className="btn sm" to={`/sources/${s.id}`}>Browse</Link>
+              {noCore ? <button type="button" className="btn sm" disabled>Browse</button> : <Link className="btn sm" to={`/sources/${s.id}`}>Browse</Link>}
             </div>
           ))}
         </div>
+        {noCore && <NeedsCore />}
       </Section>
       <Section title="How importing works">
         <ul className="set-bullets">

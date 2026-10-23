@@ -390,6 +390,9 @@ body.viewer-open pocket-ask-launcher:not([open]) { display: none; }
 .provider small { color: var(--muted); font-size: 12px; line-height: 1.35; }
 .via-core { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: var(--surface-2); }
 .via-core .source-ico { background: var(--surface); color: var(--muted); }
+.via-core.disabled { cursor: not-allowed; }
+.via-core.disabled > .source-ico, .via-core.disabled b { opacity: .5; }
+.needs-core-row > img, .needs-core-row .acct-name { opacity: .5; }
 .cloud-actions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 @media (max-width: 640px) { .cloud-row { flex-wrap: wrap; } .cloud-actions { width: 100%; justify-content: flex-start; } }
 

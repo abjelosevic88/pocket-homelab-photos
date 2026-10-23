@@ -1,10 +1,11 @@
 // Connect a cloud: pick a provider, then sign in (OAuth) or fill in its address and password (form).
 import { useEffect, useState } from 'react'
 import { clouds } from '../lib/api'
+import { useApp } from '../lib/app-context'
 import { cloudKind } from '../lib/clouds'
 import type { CloudAccount, CloudProvider } from '../lib/types'
 import { Icon } from './icons'
-import { Field, Loading, Modal, errMsg, useToast } from './ui'
+import { Field, Loading, Modal, NeedsCore, errMsg, useToast } from './ui'
 
 export function AddCloud({ onClose, onAdded }: { onClose: () => void; onAdded: (a: CloudAccount) => void }) {
   const [providers, setProviders] = useState<CloudProvider[] | null>(null)
@@ -16,6 +17,7 @@ export function AddCloud({ onClose, onAdded }: { onClose: () => void; onAdded: (
   const [fields, setFields] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const { toast } = useToast()
+  const { status } = useApp()
 
   useEffect(() => {
     const c = new AbortController()
@@ -91,6 +93,13 @@ export function AddCloud({ onClose, onAdded }: { onClose: () => void; onAdded: (
               <span className="source-ico"><Icon name="shield" size={18} /></span>
               <div className="grow"><b>Use my Nextcloud from Pocket Core</b><div className="muted small">The same Nextcloud login your other Pocket apps use. Nothing to type here.</div></div>
               <button type="button" className="btn ghost sm" onClick={() => { setVia('form'); setError('') }}>Connect directly instead</button>
+            </div>
+          )}
+          {/* Without Pocket Core, the Core way in to Nextcloud is still shown, greyed out, with why. */}
+          {pick.kind === 'nextcloud' && pick.auth === 'form' && !status?.core_configured && (
+            <div className="via-core disabled" aria-disabled="true">
+              <span className="source-ico"><Icon name="shield" size={18} /></span>
+              <div className="grow"><b>Use my Nextcloud from Pocket Core</b><NeedsCore /></div>
             </div>
           )}
           {pick.auth === 'core' && via === 'form' && (
