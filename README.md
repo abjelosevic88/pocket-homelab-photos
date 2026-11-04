@@ -1,6 +1,6 @@
 <p align="center"><img src="web/public/favicon.svg" width="72" alt=""></p>
 <h1 align="center">Pocket Photos</h1>
-<p align="center">The photos of a household in one private place: a library that feels like Apple Photos or Google Photos, albums, people, memories and places, on top of the Immich server you already run — and the pictures sitting in Pocket Files and Pocket Documents, one tap away from the library.<br>One Go binary, one SQLite file, one volume.</p>
+<p align="center">The photos of a household in one private place: a library that feels like Apple Photos or Google Photos, albums, people, memories and places, on top of Immich — and the pictures sitting in Pocket Files and Pocket Documents, one tap away from the library.<br>Comes with its own Immich, set up for you — or works with yours.</p>
 <p align="center">
   <a href="https://github.com/abjelosevic88/pocket-homelab-photos/actions"><img src="https://github.com/abjelosevic88/pocket-homelab-photos/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/abjelosevic88/pocket-homelab-photos/pkgs/container/pocket-homelab-photos"><img src="https://img.shields.io/badge/ghcr.io-amd64%20%7C%20arm64-blue" alt="image"></a>
@@ -62,6 +62,20 @@ originals.
 
 All screenshots use the fixture library — real photographs from Unsplash, made-up people and trips.
 [How to refresh them](docs/screenshots/README.md).
+
+## Immich included, or bring your own
+
+**No Immich yet?** Pocket Photos can bring its own, and you never have to open it:
+
+- It runs next to Pocket Photos with no port of its own. Only the app talks to it.
+- On the first start Pocket Photos makes Immich's administrator for you.
+- Everyone who signs in to Pocket Photos gets their own Immich account automatically, so their photos, albums and
+  faces stay theirs. Each person also gets an Immich login for Immich's phone app, if you open its port.
+
+**Already run Immich?** Point Pocket Photos at it instead. It never changes an Immich that already has an
+administrator; everyone connects their own account there.
+
+The same [docker-compose.yml](docker-compose.yml) does both: the bundled Immich is its `immich` profile.
 
 ## What it does
 
@@ -125,6 +139,45 @@ not video analysis. Your questions are saved as private Pocket AI conversations.
 
 ## Run it
 
+Pick one of three ways. Whichever you choose, open Pocket Photos afterwards and create the first account (or set
+`ADMIN_EMAIL` / `ADMIN_PASSWORD`). See [docker-compose.yml](docker-compose.yml), [configuration](docs/configuration.md)
+and the [API](docs/api.md). Put it behind HTTPS and set `SECURE_COOKIES=true`.
+
+### With Pocket Core: one click
+
+In [Pocket Core](https://github.com/abjelosevic88/pocket-homelab-core), go to **Apps → Install app → Pocket Photos**.
+It installs Pocket Photos with its own Immich, keeps photos in a `photos` folder in the app's folder, and signs
+everyone in with Pocket Core.
+
+### With its own Immich (Docker Compose)
+
+Download [docker-compose.yml](docker-compose.yml) and [.env.example](.env.example) (save it as `.env`, set
+`BASE_URL` and `DB_PASSWORD`), then:
+
+```sh
+mkdir -p photos                      # or set PHOTOS_FOLDER in .env
+docker compose up -d                 # .env has COMPOSE_PROFILES=immich: the app and Immich start together
+```
+
+- Immich takes a minute or two on its first start; then Pocket Photos makes its administrator, and everyone who
+  signs in gets their own Immich account.
+- Immich runs four containers (server, machine learning for faces and search, Postgres, Redis); plan for about
+  2–3 GB of memory.
+- Immich has no port of its own. For Immich's phone app (backing up the camera roll) and web page, uncomment `2283`
+  under `ports`; each person finds their Immich login under Settings → Your photo library. Uncomment `/dev/dri`
+  under `devices` for hardware video transcoding.
+
+### With the Immich you already run
+
+Use the same compose file without the profile: drop `COMPOSE_PROFILES` from `.env` and point Pocket Photos at your
+server.
+
+```sh
+IMMICH_URL=http://your-immich:2283 IMMICH_PUBLIC_URL=https://immich.example.com docker compose up -d
+```
+
+Or as a single container:
+
 ```sh
 docker run -d --name pocket-photos -p 8080:8080 -v ./data:/data \
   -e BASE_URL=https://photos.example.com -e TZ=Europe/Berlin \
@@ -132,10 +185,12 @@ docker run -d --name pocket-photos -p 8080:8080 -v ./data:/data \
   ghcr.io/abjelosevic88/pocket-homelab-photos:latest
 ```
 
-Open it, create the first account (or set `ADMIN_EMAIL` / `ADMIN_PASSWORD`) and connect your Immich library
-under **Settings → Your photo library**. See [docker-compose.yml](docker-compose.yml),
-[configuration](docs/configuration.md) and the [API](docs/api.md). Put it behind HTTPS and set
-`SECURE_COOKIES=true`. `IMMICH_PUBLIC_URL` is where sharing links open, so recipients need to reach it.
+Everyone connects their Immich account under **Settings → Your photo library** (an API key or email and password,
+or the login Pocket Core keeps for them). `IMMICH_PUBLIC_URL` is where sharing links open, so recipients need to reach
+it. Pocket Photos never changes an Immich that already has an administrator.
+
+Switching an install later: to move from the included Immich to yours, remove `COMPOSE_PROFILES` from `.env`, set
+`IMMICH_URL`, then stop the four `immich-*` services and run `docker compose up -d`.
 
 On a Pocket Box, set `CORE_URL` and `CORE_REGISTRATION_KEY`: the app registers itself, people sign in with
 Pocket Core, and Pocket Files and Pocket Documents appear under *Sources* with nothing to configure — and so
@@ -143,8 +198,10 @@ does each person's Nextcloud. Google Drive, OneDrive and Dropbox need your own O
 (`GOOGLE_*`, `MICROSOFT_*`, `DROPBOX_*`; the steps are in [Clouds](docs/clouds.md) and in the app).
 
 Immich 3.3 is the tested API target (structured search filters and the non-destructive edits API). Immich
-remains the system of record for originals, albums, faces, sharing and trash — back it up on its own.
-Pocket Photos' `./data` holds only accounts and each person's sealed Immich connection;
+remains the system of record for originals, albums, faces, sharing and trash — back it up on its own (with the
+included Immich: the `photos` folder and Immich's database, using Immich's own database backups under its
+Administration → Job settings, which land in `photos/backups`). Pocket Photos' `./data` holds accounts, each person's
+sealed Immich connection and, with the included Immich, the sealed Immich logins — keep it with `secret.key`;
 `pocket-photos backup` writes a consistent copy of the database.
 
 ## Build

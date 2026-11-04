@@ -28,8 +28,14 @@ export interface ImmichUser {
 /** GET /connection: whose Immich this person reaches, and how. */
 export interface Connection {
   connected: boolean
-  via?: 'core' | 'direct'
+  via?: 'core' | 'direct' | 'bundled'
   core?: boolean
+  /** Pocket Photos came with its own Immich (everyone has an account there). */
+  bundled?: boolean
+  /** Your own login on that Immich, for Immich's phone app. */
+  immich_login?: { email: string; password: string }
+  /** Admins: Immich's administrator. */
+  bundled_admin?: { email: string; password: string }
   public_url?: string
   server_configured?: boolean
   message?: string

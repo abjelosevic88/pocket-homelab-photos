@@ -45,6 +45,8 @@ type Server struct {
 	cloudClientOnce sync.Once
 	adoptMu         sync.Mutex
 	adoptTried      map[int64]time.Time
+
+	bundled bundledState // the Immich that comes with Pocket Photos
 }
 
 func New(cfg *config.Config, st *store.Store, log *slog.Logger, web fs.FS) *Server {
@@ -77,6 +79,9 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 		go s.coreLoop(ctx)
 	}
 	s.bg = ctx
+	if s.cfg.ImmichBundled != "" {
+		go s.bundledLoop(ctx)
+	}
 	go s.cloudLoop(ctx)
 	_ = s.store.PurgeSessions(ctx)
 	go func() {

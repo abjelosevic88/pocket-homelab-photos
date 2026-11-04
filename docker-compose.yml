@@ -1,3 +1,14 @@
+# Pocket Photos — your photo library, on top of Immich. Go + SQLite.
+#
+# With its own Immich:  COMPOSE_PROFILES=immich docker compose up -d
+#   (or COMPOSE_PROFILES=immich in .env, as in .env.example and Pocket Core's installer)
+#   starts the app and Immich (server, machine learning, database, Redis). Pocket Photos
+#   makes Immich's administrator by itself and gives everyone who uses it an Immich
+#   account of their own; photos are kept in PHOTOS_FOLDER (default ./photos). Immich has
+#   no port of its own: only the app reaches it.
+# With your Immich:     IMMICH_URL=http://your-immich:2283 docker compose up -d
+#   starts only the app; everyone connects their own Immich account (API key or
+#   password). An Immich that already has an administrator is never changed.
 services:
   pocket-photos:
     image: ghcr.io/abjelosevic88/pocket-homelab-photos:latest
@@ -8,7 +19,9 @@ services:
     environment:
       TZ: ${TZ:-UTC}
       BASE_URL: ${BASE_URL:-}
-      IMMICH_URL: ${IMMICH_URL:-http://immich-server:2283}   # how Photos reaches Immich
+      IMMICH_URL: ${IMMICH_URL:-http://immich-server:2283}   # how Photos reaches Immich (the one below, or yours)
+      # auto: set up a fresh Immich (the one below); leave one that has an administrator alone
+      IMMICH_BUNDLED: ${IMMICH_BUNDLED:-auto}
       IMMICH_PUBLIC_URL: ${IMMICH_PUBLIC_URL:-}              # where shared links open in a browser
       # Set both to skip the first-run setup screen and create the admin directly:
       # ADMIN_EMAIL: ${ADMIN_EMAIL}
@@ -25,3 +38,64 @@ services:
       # DROPBOX_APP_SECRET: …
     volumes:
       - ./data:/data                    # database, secret.key, backups
+    depends_on:
+      immich-server:
+        condition: service_started
+        required: false   # only with the immich profile
+
+  # Immich, from its official images (the "immich" profile). Photos and videos are
+  # kept in PHOTOS_FOLDER, the database in IMMICH_DB_DIR (local disk, not a network share).
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:${IMMICH_VERSION:-release}
+    container_name: pocket-photos-immich
+    profiles: [immich]
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-UTC}
+      DB_HOSTNAME: immich-database
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_DATABASE_NAME: immich
+      REDIS_HOSTNAME: immich-redis
+    volumes:
+      - ${PHOTOS_FOLDER:-./photos}:/data
+    # Immich's own phone app and web page (sign in with the Immich login under
+    # Settings → Immich in Pocket Photos):
+    # ports:
+    #   - "2283:2283"
+    # Hardware video transcoding on an Intel/AMD GPU:
+    # devices:
+    #   - /dev/dri:/dev/dri
+    depends_on:
+      - immich-redis
+      - immich-database
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:${IMMICH_VERSION:-release}
+    container_name: pocket-photos-immich-ml
+    profiles: [immich]
+    restart: unless-stopped
+    volumes:
+      - ${IMMICH_MODEL_DIR:-./immich/model-cache}:/cache
+
+  immich-redis:
+    image: docker.io/valkey/valkey:9
+    container_name: pocket-photos-immich-redis
+    profiles: [immich]
+    restart: unless-stopped
+    healthcheck:
+      test: redis-cli ping || exit 1
+
+  immich-database:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+    container_name: pocket-photos-immich-db
+    profiles: [immich]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: immich
+      POSTGRES_INITDB_ARGS: --data-checksums
+    volumes:
+      - ${IMMICH_DB_DIR:-./immich/postgres}:/var/lib/postgresql/data
+    shm_size: 128mb

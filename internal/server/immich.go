@@ -25,8 +25,15 @@ func apiBase(raw string) (string, error) {
 	return strings.TrimSuffix(strings.TrimRight(raw, "/"), "/api") + "/api", nil
 }
 func (s *Server) connection(ctx context.Context, u *store.User) (*connection, error) {
-	var sealed, kind string
-	e := s.store.DB.QueryRowContext(ctx, `SELECT secret,kind FROM connections WHERE user_id=?`, u.ID).Scan(&sealed, &kind)
+	var sealed, kind, email string
+	e := s.store.DB.QueryRowContext(ctx, `SELECT secret,kind,email FROM connections WHERE user_id=?`, u.ID).Scan(&sealed, &kind, &email)
+	if errors.Is(e, sql.ErrNoRows) && s.bundledOn() {
+		// the Immich that came with Pocket Photos: everyone has an account there (bundled.go)
+		if e := s.bundledConnect(ctx, u); e != nil {
+			return nil, e
+		}
+		e = s.store.DB.QueryRowContext(ctx, `SELECT secret,kind,email FROM connections WHERE user_id=?`, u.ID).Scan(&sealed, &kind, &email)
+	}
 	if e == nil {
 		key, e := s.open(sealed)
 		if e != nil {
@@ -36,7 +43,11 @@ func (s *Server) connection(ctx context.Context, u *store.User) (*connection, er
 		if e != nil {
 			return nil, e
 		}
-		return &connection{base, s.cfg.ImmichPublicURL, key, kind, "direct"}, nil
+		via := "direct"
+		if be, _ := s.bundledLogin(ctx, u.ID); be != "" && strings.EqualFold(be, email) {
+			via = "bundled"
+		}
+		return &connection{base, s.cfg.ImmichPublicURL, key, kind, via}, nil
 	}
 	if !errors.Is(e, sql.ErrNoRows) {
 		return nil, e
@@ -84,9 +95,10 @@ func (s *Server) upstream(ctx context.Context, c *connection, method, path strin
 	return s.http.Do(req)
 }
 func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) {
-	c, e := s.connection(r.Context(), userFrom(r.Context()))
+	u := userFrom(r.Context())
+	c, e := s.connection(r.Context(), u)
 	if e != nil {
-		writeJSON(w, 200, map[string]any{"connected": false, "message": e.Error(), "server_configured": s.cfg.ImmichURL != "", "public_url": s.cfg.ImmichPublicURL, "core": s.core.Configured()})
+		writeJSON(w, 200, map[string]any{"connected": false, "message": e.Error(), "server_configured": s.cfg.ImmichURL != "", "public_url": s.cfg.ImmichPublicURL, "core": s.core.Configured(), "bundled": s.bundledOn()})
 		return
 	}
 	res, e := s.upstream(r.Context(), c, "GET", "/users/me", nil, nil)
@@ -104,7 +116,19 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 502, "invalid Immich response")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"connected": true, "user": user, "via": c.Via, "public_url": c.Public, "server_configured": s.cfg.ImmichURL != "", "core": s.core.Configured()})
+	out := map[string]any{"connected": true, "user": user, "via": c.Via, "public_url": c.Public, "server_configured": s.cfg.ImmichURL != "", "core": s.core.Configured(), "bundled": s.bundledOn()}
+	if c.Via == "bundled" {
+		// their own login, for Immich's phone app where its port is published
+		if email, pw := s.bundledLogin(r.Context(), u.ID); email != "" {
+			out["immich_login"] = map[string]string{"email": email, "password": pw}
+		}
+	}
+	if s.bundledOn() && u.Role == "admin" {
+		if pw := s.openKV(r.Context(), kvBundledAdmin); pw != "" {
+			out["bundled_admin"] = map[string]string{"email": bundledAdminEmail, "password": pw}
+		}
+	}
+	writeJSON(w, 200, out)
 }
 func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	var in struct {

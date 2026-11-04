@@ -10,6 +10,9 @@ All configuration comes from environment variables. Credentials never belong in 
 | `BASE_URL` | empty | Browser URL; required for OIDC callback registration |
 | `IMMICH_URL` | empty | Trusted server address for direct account connections; optional `/api` suffix |
 | `IMMICH_PUBLIC_URL` | empty | Immich browser URL used to open sharing links |
+| `IMMICH_BUNDLED` | off (`auto` in the sample compose file) | `auto`: a fresh Immich at `IMMICH_URL` (the sample's `immich` profile) gets its administrator from the app (`pocket-photos@pocket.invalid`, password sealed in `data/`), and everyone gets their own Immich account plus an API key on first use. An Immich that already has an administrator is left alone and people connect their own accounts. `true`: always the bundled one. |
+| `COMPOSE_PROFILES` | – | Compose, not the app: `immich` starts the bundled Immich (the sample `.env` and Pocket Core's installer set it) |
+| `DB_PASSWORD`, `PHOTOS_FOLDER`, `IMMICH_DB_DIR`, `IMMICH_MODEL_DIR`, `IMMICH_VERSION` | –, `./photos`, `./immich/postgres`, `./immich/model-cache`, `release` | Compose file only: the bundled Immich's database password, where photos are kept, its database and machine-learning model cache, and its version |
 | `CORE_URL` | empty | Pocket Core internal URL |
 | `CORE_REGISTRATION_KEY` | empty | Key authorizing initial app registration |
 | `CORE_APP_URL` | `BASE_URL` | URL Core uses to reach Photos |

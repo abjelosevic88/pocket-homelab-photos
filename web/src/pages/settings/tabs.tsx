@@ -57,6 +57,7 @@ export function LibraryTab() {
   const [form, setForm] = useState({ api_key: '', email: '', password: '' })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [shown, setShown] = useState<'' | 'mine' | 'admin'>('')
   const connect = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true); setErr('')
@@ -82,7 +83,7 @@ export function LibraryTab() {
               <Avatar name={c.user?.name} email={c.user?.email} size={40} />
               <div className="grow">
                 <div className="lib-name">{c.user?.name || c.user?.email}</div>
-                <div className="muted small">{c.user?.email} · {c.via === 'core' ? 'connected through Pocket Core' : 'connected directly'}</div>
+                <div className="muted small">{c.user?.email} · {c.via === 'core' ? 'connected through Pocket Core' : c.via === 'bundled' ? 'your account on the Immich that comes with Pocket Photos' : 'connected directly'}</div>
               </div>
               {c.public_url && <a className="btn sm" href={c.public_url} target="_blank" rel="noreferrer"><Icon name="external" size={14} />Open Immich</a>}
             </div>
@@ -92,6 +93,11 @@ export function LibraryTab() {
               <div className="set-stat"><Icon name="album" size={16} /><span className="set-stat-n tnum">{albums.length}</span><span className="set-stat-l">Albums</span></div>
             </div>}
             {quota > 0 && <div className="stack tight"><div className="row small"><span className="grow">Storage</span><span className="muted">{bytes(c.user?.quotaUsageInBytes || 0)} of {bytes(quota)}</span></div><div className="bar"><span className="fill" style={{ width: Math.max(2, Math.round(((c.user?.quotaUsageInBytes || 0) / quota) * 100)) + '%' }} /></div></div>}
+            {c.via === 'bundled' && <div className="stack tight">
+              <p className="muted small">Photos you upload are kept in the <code>photos</code> folder next to Pocket Photos' <code>docker-compose.yml</code> (or <code>PHOTOS_FOLDER</code>).</p>
+              {c.immich_login && <p className="muted small">Immich's own phone app (publish Immich's port in the compose file first): sign in as <code>{c.immich_login.email}</code>, password {shown === 'mine' ? <code>{c.immich_login.password}</code> : <button type="button" className="link-btn" onClick={() => setShown('mine')}>show</button>}</p>}
+              {c.bundled_admin && <p className="muted small">Immich's administrator: <code>{c.bundled_admin.email}</code>, password {shown === 'admin' ? <code>{c.bundled_admin.password}</code> : <button type="button" className="link-btn" onClick={() => setShown('admin')}>show</button>}</p>}
+            </div>}
             {c.via === 'direct' && <div><button type="button" className="btn danger-ghost sm" disabled={busy} onClick={disconnect}><Icon name="x" size={14} />Remove the direct connection</button></div>}
           </div>
         ) : c?.message ? <div className="callout warn"><Icon name="info" size={15} /><span>{c.message}</span></div> : null}
@@ -293,7 +299,7 @@ export function AboutTab() {
   const rows: [string, React.ReactNode][] = [
     ['Version', <code key="v">{status?.version || 'dev'}</code>],
     ['Sign-in', status?.auth_mode || ''],
-    ['Library', connection?.connected ? `Immich (${connection.via === 'core' ? 'through Pocket Core' : 'direct'})` : 'not connected'],
+    ['Library', connection?.connected ? `Immich (${connection.via === 'core' ? 'through Pocket Core' : connection.via === 'bundled' ? 'included' : 'direct'})` : 'not connected'],
     ['In your library', stats ? `${plural(stats.images, 'photo')}, ${plural(stats.videos, 'video')}` : '—'],
   ]
   return (

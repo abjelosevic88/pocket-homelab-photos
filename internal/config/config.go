@@ -50,6 +50,10 @@ type Config struct {
 
 	ImmichURL       string
 	ImmichPublicURL string
+	// The Immich at IMMICH_URL came with Pocket Photos (the sample compose file):
+	// the app makes its administrator and gives everyone their own account.
+	// "true", "auto" (only a fresh Immich, or one this app set up before) or "" (never).
+	ImmichBundled string
 
 	// Clouds people can index (docs/clouds.md). The OAuth clouds need the box owner's own client
 	// registration; the redirect URI is BASE_URL/api/v1/clouds/oauth/<kind>/callback.
@@ -61,6 +65,16 @@ type Config struct {
 	DropboxAppKey         string
 	DropboxAppSecret      string
 	CloudScanEvery        time.Duration
+}
+
+func bundledMode(v string) string {
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "on":
+		return "true"
+	case "auto":
+		return "auto"
+	}
+	return ""
 }
 
 func env(key, def string) string {
@@ -134,6 +148,7 @@ func Load() (*Config, error) {
 
 		ImmichURL:       strings.TrimRight(env("IMMICH_URL", ""), "/"),
 		ImmichPublicURL: strings.TrimRight(env("IMMICH_PUBLIC_URL", ""), "/"),
+		ImmichBundled:   bundledMode(env("IMMICH_BUNDLED", "")),
 
 		GoogleClientID:        env("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:    env("GOOGLE_CLIENT_SECRET", ""),
@@ -151,6 +166,9 @@ func Load() (*Config, error) {
 	case "local", "proxy", "none":
 	default:
 		return nil, fmt.Errorf("AUTH_MODE must be one of local, proxy, none (got %q)", c.AuthMode)
+	}
+	if c.ImmichBundled != "" && c.ImmichURL == "" {
+		return nil, fmt.Errorf("IMMICH_BUNDLED needs IMMICH_URL (the bundled Immich's address, e.g. http://immich-server:2283)")
 	}
 	if c.Port <= 0 || c.Port > 65535 {
 		return nil, fmt.Errorf("PORT out of range: %d", c.Port)
