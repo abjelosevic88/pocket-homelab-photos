@@ -60,7 +60,7 @@ func (s *Server) resolveUser(r *http.Request) (*store.User, error) {
 	}
 	if tok != "" {
 		if s.core.Configured() && core.IsLinkToken(tok) {
-			return nil, http.ErrNoCookie
+			return s.linkUser(ctx, tok, r)
 		}
 		if s.core.Configured() && core.IsCoreToken(tok) {
 			return s.coreUser(ctx, tok)
@@ -176,6 +176,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		"title":           st.Title,
 		"oidc":            s.oidcEnabled() && s.cfg.AuthMode == "local",
 		"oidc_name":       s.oidcName(),
+		"photolab_url":    s.siblingURL(r.Context(), "photolab"),
 	})
 }
 

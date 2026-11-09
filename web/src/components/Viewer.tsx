@@ -9,6 +9,7 @@ import { Select } from './Select'
 import { Confirm, errMsg, useToast } from './ui'
 import { usePanZoom } from './usePanZoom'
 import { PhotoAskButton } from './PhotoAskButton'
+import { useApp } from '../lib/app-context'
 
 const RATINGS = [{ value: 0, label: 'Unrated' }, ...[1, 2, 3, 4, 5].map(n => ({ value: n, label: '★'.repeat(n) }))]
 
@@ -20,6 +21,7 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
   onUpdated: (a: Asset) => void
   onRemoved: () => void
 }) {
+  const photolab = (useApp().status?.photolab_url || '').replace(/\/$/, '')
   const { toast } = useToast()
   const asset = assets[index]
   const [detail, setDetail] = useState<Asset>(asset)
@@ -158,6 +160,8 @@ export function Viewer({ assets, index, setIndex, onClose, onUpdated, onRemoved 
         <button type="button" className={`vbtn ${detail.isFavorite ? 'fav' : ''}`} aria-label={detail.isFavorite ? 'Remove from favorites' : 'Add to favorites'} title="Favorite (f)" disabled={busy} onClick={() => update({ isFavorite: !detail.isFavorite })}><Icon name="heart" size={19} fill={detail.isFavorite} /></button>
         <button type="button" className={`vbtn ${info ? 'on' : ''}`} aria-label="Show photo information" aria-pressed={info} title="Details (i)" onClick={() => setInfo(!info)}><Icon name="info" size={19} /></button>
         <button type="button" className={`vbtn ${editing ? 'on' : ''}`} aria-label="Edit photo" title="Edit (e)" disabled={detail.type === 'VIDEO' || detail.isTrashed} onClick={startEdit}><Icon name="edit" size={19} /></button>
+        {detail.type !== 'VIDEO' && <a className={`vbtn ${photolab ? '' : 'off'}`} href={photolab ? `${photolab}/open?photos=${asset.id}` : undefined} target="_blank" rel="noreferrer" aria-disabled={!photolab}
+          aria-label="Edit in Photo Lab" title={photolab ? 'Edit in Photo Lab: crop, light, looks, text and more; the edit comes back as a new photo' : 'Edit in Photo Lab needs Pocket Core and Pocket Photo Lab'} onClick={e => { if (!photolab) e.preventDefault() }}><Icon name="sliders" size={19} /></a>}
         <button type="button" className={`vbtn ${slide ? 'on' : ''}`} aria-label={slide ? 'Stop slideshow' : 'Start slideshow'} title="Slideshow (space)" onClick={() => setSlide(!slide)}><Icon name={slide ? 'pause' : 'play'} size={17} /></button>
         <a className="vbtn" href={original(asset.id)} download={detail.originalFileName} aria-label="Download original" title="Download original"><Icon name="download" size={19} /></a>
         <button type="button" className="vbtn" aria-label={detail.isTrashed ? 'Delete permanently' : 'Move to recently deleted'} title={detail.isTrashed ? 'Delete permanently' : 'Delete'} onClick={() => setConfirm(true)}><Icon name="trash" size={19} /></button>

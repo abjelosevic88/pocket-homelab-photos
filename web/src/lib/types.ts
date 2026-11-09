@@ -7,6 +7,7 @@ export interface User {
 }
 
 export interface AuthStatus {
+  photolab_url?: string
   needs_setup: boolean
   auth_mode: 'local' | 'proxy' | 'none'
   authenticated: boolean
