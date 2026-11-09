@@ -220,6 +220,7 @@ var immichRules = []proxyRule{
 	{"GET PUT DELETE", regexp.MustCompile(`^/memories/[a-fA-F0-9-]{36}$`)},
 	{"POST", regexp.MustCompile(`^/trash/restore/assets$`)},
 	{"POST", regexp.MustCompile(`^/download/(archive|info)$`)},
+	{"POST", regexp.MustCompile(`^/stacks$`)},
 }
 
 func allowedImmich(method, path string) bool {

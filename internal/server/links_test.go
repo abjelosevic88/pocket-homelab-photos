@@ -19,6 +19,8 @@ func TestLinkScopes(t *testing.T) {
 		{"GET", id + "/original", []string{"photos:write"}, false},
 		{"POST", "/api/v1/immich/assets", []string{"photos:write"}, true},
 		{"POST", "/api/v1/immich/assets", []string{"photos:read"}, false},
+		{"POST", "/api/v1/immich/stacks", []string{"photos:write"}, true},
+		{"POST", "/api/v1/immich/stacks", []string{"photos:read"}, false},
 		{"PUT", id, []string{"photos:read", "photos:write"}, false},
 		{"DELETE", "/api/v1/immich/assets", []string{"photos:read", "photos:write"}, false},
 		{"GET", "/api/v1/connection", []string{"photos:read"}, false},

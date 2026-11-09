@@ -20,7 +20,7 @@ import (
 
 var linkOffers = []core.Offer{
 	{Scope: "photos:read", Name: "See your photos", Description: "Browse and search your photo library and open thumbnails and originals (Pocket Photo Lab picks pictures to edit). Nothing is changed."},
-	{Scope: "photos:write", Name: "Add photos", Description: "Add new photos to your library (Pocket Photo Lab saves edited copies there). It cannot change or delete the photos you have."},
+	{Scope: "photos:write", Name: "Add photos", Description: "Add new photos to your library and stack them on the photo they came from (Pocket Photo Lab saves edited copies there). It cannot change or delete the photos you have."},
 }
 
 type linkRoute struct {
@@ -34,7 +34,7 @@ var linkRoutes = []linkRoute{
 	{"GET", regexp.MustCompile(`^/api/v1/immich/(users/me|timeline/(buckets|bucket)|albums)$`), "photos:read"},
 	{"POST", regexp.MustCompile(`^/api/v1/immich/search/(metadata|smart|random)$`), "photos:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/immich/assets/[a-fA-F0-9-]{36}(/(thumbnail|original))?$`), "photos:read"},
-	{"POST", regexp.MustCompile(`^/api/v1/immich/assets$`), "photos:write"},
+	{"POST", regexp.MustCompile(`^/api/v1/immich/(assets|stacks)$`), "photos:write"},
 }
 
 var errLinkScope = errors.New("outside the link's scope")
