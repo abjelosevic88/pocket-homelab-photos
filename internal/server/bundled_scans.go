@@ -4,7 +4,7 @@ package server
 // (OCR) with its machine-learning part. A photo that arrives while that part is still downloading its
 // models or the machine is overloaded (a Raspberry Pi installing apps) fails those scans once, and
 // Immich doesn't try again: the photo never shows up under People. So Pocket Photos asks the bundled
-// Immich, a minute after it is ready and then every half hour, to scan whatever is still missing.
+// Immich, a minute or two after it is ready and then every half hour, to scan whatever is still missing.
 // "start" without force only queues photos that lack the result, so it costs nothing when all is done.
 
 import (
@@ -18,16 +18,25 @@ var catchUpQueues = []string{"faceDetection", "smartSearch", "ocr"}
 const catchUpEvery = 30 * time.Minute
 
 func (s *Server) scanCatchUpLoop(ctx context.Context) {
-	wait := time.Minute
+	// Look every minute until the bundled Immich is ready (on a Raspberry Pi that takes a few
+	// minutes after a start), catch up a minute after that, then every half hour.
+	var last time.Time
+	readySince := time.Time{}
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(wait):
+		case <-time.After(time.Minute):
 		}
-		wait = catchUpEvery
-		if ready, _ := s.bundledReady(); ready {
+		ready, _ := s.bundledReady()
+		switch {
+		case !ready:
+			readySince = time.Time{}
+		case readySince.IsZero():
+			readySince = time.Now()
+		case time.Since(last) >= catchUpEvery:
 			s.catchUpScans(ctx)
+			last = time.Now()
 		}
 	}
 }
