@@ -81,6 +81,7 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	s.bg = ctx
 	if s.cfg.ImmichBundled != "" {
 		go s.bundledLoop(ctx)
+		go s.scanCatchUpLoop(ctx) // photos whose face / smart-search / text scans failed (bundled_scans.go)
 	}
 	go s.cloudLoop(ctx)
 	_ = s.store.PurgeSessions(ctx)
