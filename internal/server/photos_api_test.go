@@ -23,6 +23,12 @@ func TestPhotosSearchAndGet(t *testing.T) {
 			writeJSON(w, 200, map[string]any{"assets": map[string]any{"items": []any{
 				map[string]any{"id": id, "type": "IMAGE", "originalFileName": "IMG_1.JPG", "localDateTime": "2026-10-25T13:44:13.000Z", "exifInfo": map[string]any{"city": "Mostar", "country": "Bosnia and Herzegovina"}},
 			}}})
+		case "/api/assets/" + id + "/thumbnail":
+			if r.URL.Query().Get("size") != "preview" {
+				t.Errorf("picture size %q", r.URL.Query().Get("size"))
+			}
+			w.Header().Set("Content-Type", "image/jpeg")
+			_, _ = w.Write([]byte("\xff\xd8jpeg"))
 		case "/api/assets/" + id:
 			writeJSON(w, 200, map[string]any{"id": id, "type": "IMAGE", "originalFileName": "IMG_1.JPG", "exifInfo": map[string]any{"make": "Apple", "model": "iPhone 17 Pro"}, "people": []any{map[string]any{"name": "Ana"}, map[string]any{"name": ""}}})
 		default:
@@ -51,6 +57,10 @@ func TestPhotosSearchAndGet(t *testing.T) {
 	w = request(s, "GET", "/api/v1/photos/"+id, nil, cookie)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"camera":"Apple iPhone 17 Pro"`) || !strings.Contains(w.Body.String(), `"people":["Ana"]`) {
 		t.Fatal(w.Code, w.Body.String())
+	}
+	w = request(s, "GET", "/api/v1/photos/"+id+"/picture", nil, cookie)
+	if w.Code != 200 || w.Header().Get("Content-Type") != "image/jpeg" || !strings.Contains(w.Body.String(), "jpeg") {
+		t.Fatal("picture:", w.Code, w.Header(), w.Body.String())
 	}
 	if w = request(s, "GET", "/api/v1/photos/nope", nil, cookie); w.Code != 400 {
 		t.Fatal(w.Code)

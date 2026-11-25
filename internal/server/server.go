@@ -177,6 +177,7 @@ func (s *Server) Router() http.Handler {
 			r.Handle("/immich/*", http.HandlerFunc(s.handleImmich))
 			r.Get("/photos", s.handlePhotosList)
 			r.Get("/photos/{id}", s.handlePhotoGet)
+			r.Get("/photos/{id}/picture", s.handlePhotoPicture)
 			r.Get("/users", s.handleListUsers)
 			r.Post("/users", s.handleCreateUser)
 			r.Put("/users/{id}", s.handleUpdateUser)

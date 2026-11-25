@@ -194,3 +194,42 @@ func (s *Server) handlePhotoGet(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{"photo": s.photoOut(a, true)})
 }
+
+// GET /photos/{id}/picture: the photo itself at screen size (Immich's preview
+// JPEG, about 1440 px), for an AI agent to look at through Pocket Core.
+func (s *Server) handlePhotoPicture(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if !assetIDRe.MatchString(id) {
+		writeErr(w, 400, "not a photo id")
+		return
+	}
+	c, e := s.connection(r.Context(), userFrom(r.Context()))
+	if e != nil {
+		writeJSON(w, 409, map[string]string{"error": e.Error(), "code": "connection_unavailable"})
+		return
+	}
+	res, e := s.upstream(r.Context(), c, http.MethodGet, "/assets/"+id+"/thumbnail?size=preview", nil, http.Header{})
+	if e != nil {
+		writeErr(w, 502, "Immich request failed; check the server connection")
+		return
+	}
+	defer res.Body.Close()
+	if res.StatusCode == 404 || res.StatusCode == 400 {
+		writeErr(w, 404, "photo not found")
+		return
+	}
+	if res.StatusCode != 200 {
+		writeErr(w, 502, "Immich could not give the picture ("+res.Status+")")
+		return
+	}
+	ct := res.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "image/") {
+		ct = "image/jpeg"
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Content-Disposition", `inline; filename="`+id+`.jpg"`)
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	_, _ = io.Copy(w, io.LimitReader(res.Body, 20<<20))
+}

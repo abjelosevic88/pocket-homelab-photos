@@ -33,7 +33,7 @@ var linkRoutes = []linkRoute{
 	{"GET", regexp.MustCompile(`^/api/v1/auth/me$`), ""},
 	{"GET", regexp.MustCompile(`^/api/v1/immich/(users/me|timeline/(buckets|bucket)|albums)$`), "photos:read"},
 	{"POST", regexp.MustCompile(`^/api/v1/immich/search/(metadata|smart|random)$`), "photos:read"},
-	{"GET", regexp.MustCompile(`^/api/v1/photos(/[a-fA-F0-9-]{36})?$`), "photos:read"},
+	{"GET", regexp.MustCompile(`^/api/v1/photos(/[a-fA-F0-9-]{36}(/picture)?)?$`), "photos:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/immich/assets/[a-fA-F0-9-]{36}(/(thumbnail|original))?$`), "photos:read"},
 	{"POST", regexp.MustCompile(`^/api/v1/immich/(assets|stacks)$`), "photos:write"},
 }
