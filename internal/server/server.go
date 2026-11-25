@@ -175,6 +175,8 @@ func (s *Server) Router() http.Handler {
 			r.Delete("/clouds/{id}", s.handleDeleteCloud)
 			r.Post("/clouds/{id}/scan", s.handleScanCloud)
 			r.Handle("/immich/*", http.HandlerFunc(s.handleImmich))
+			r.Get("/photos", s.handlePhotosList)
+			r.Get("/photos/{id}", s.handlePhotoGet)
 			r.Get("/users", s.handleListUsers)
 			r.Post("/users", s.handleCreateUser)
 			r.Put("/users/{id}", s.handleUpdateUser)

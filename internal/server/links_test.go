@@ -14,6 +14,9 @@ func TestLinkScopes(t *testing.T) {
 	}{
 		{"GET", "/api/v1/auth/me", nil, true},
 		{"POST", "/api/v1/immich/search/metadata", []string{"photos:read"}, true},
+		{"GET", "/api/v1/photos", []string{"photos:read"}, true},
+		{"GET", "/api/v1/photos/0b1c2d3e-0000-4000-8000-000000000001", []string{"photos:read"}, true},
+		{"GET", "/api/v1/photos", []string{"photos:write"}, false},
 		{"GET", id + "/thumbnail", []string{"photos:read"}, true},
 		{"GET", id + "/original", []string{"photos:read"}, true},
 		{"GET", id + "/original", []string{"photos:write"}, false},

@@ -75,6 +75,16 @@ function GalleryInner({ view }: { view: GalleryView }) {
   const [dialog, setDialog] = useState<'album' | 'share' | 'share-album' | 'trash' | 'delete' | 'rename' | 'delete-album' | 'name-person' | null>(null)
   const [busy, setBusy] = useState(false)
   const [person, setPerson] = useState<Person | null>(null)
+  // ?photo=<id>: one photo opened from a link (Pocket AI "@photos #…", other apps)
+  const linked = /^[0-9a-f-]{36}$/i.test(sp.get('photo') || '') ? sp.get('photo')! : ''
+  const [single, setSingle] = useState<Asset | null>(null)
+  useEffect(() => {
+    if (!linked) { setSingle(null); return }
+    let live = true
+    immich.get<Asset>(`/assets/${linked}`).then(a => { if (live) setSingle(a) }).catch(e => { if (live) toast(errMsg(e), 'err') })
+    return () => { live = false }
+  }, [linked]) // eslint-disable-line react-hooks/exhaustive-deps
+  const closeSingle = () => { setSingle(null); setSp(p => { const n = new URLSearchParams(p); n.delete('photo'); return n }, { replace: true }) }
   const generation = useRef(0)
   const abort = useRef<AbortController | null>(null)
 
@@ -340,6 +350,8 @@ function GalleryInner({ view }: { view: GalleryView }) {
 
       {viewer !== null && assets[viewer] && <Viewer assets={assets} index={viewer} setIndex={setViewer} onClose={() => setViewer(null)}
         onUpdated={a => setAssets(old => old.map(x => (x.id === a.id ? { ...x, ...a } : x)))} onRemoved={() => { setViewer(null); bump() }} />}
+      {single && viewer === null && <Viewer assets={[single]} index={0} setIndex={() => {}} onClose={closeSingle}
+        onUpdated={a => setSingle(old => (old ? { ...old, ...a } : old))} onRemoved={() => { closeSingle(); bump() }} />}
       {dialog === 'album' && <AlbumPicker ids={ids} onClose={() => setDialog(null)} onDone={() => { setDialog(null); setSelected(new Set()); setSelecting(false) }} />}
       {dialog === 'share' && <ShareDialog ids={ids} onClose={() => setDialog(null)} />}
       {dialog === 'share-album' && <ShareDialog albumId={id} onClose={() => setDialog(null)} />}
