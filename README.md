@@ -118,6 +118,10 @@ The same [docker-compose.yml](docker-compose.yml) does both: the bundled Immich 
 - Sign in with Pocket Core, and use the Immich credentials Core already keeps for you.
 - Uses only `files:read` and `documents:read`; Core decides per person, and the source app checks folder,
   share and document access on every read.
+- Pocket Search finds your photos and videos when you describe them (`!photos dog on the beach`), Pocket Day
+  shows the photos and videos you took on a day, and Pocket Hub shows *On this day*: the earlier years with
+  photos from today's date. Each one asks for the person in front of it only, through that person's own
+  Immich, and can read nothing else here; someone without a library simply gets nothing.
 
 ## Ask AI about a photo
 

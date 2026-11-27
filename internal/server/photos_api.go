@@ -2,7 +2,9 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"regexp"
@@ -27,6 +29,7 @@ type immichAsset struct {
 	LocalDateTime    string `json:"localDateTime"`
 	FileCreatedAt    string `json:"fileCreatedAt"`
 	IsFavorite       bool   `json:"isFavorite"`
+	IsTrashed        bool   `json:"isTrashed"`
 	Width            int    `json:"width"`
 	Height           int    `json:"height"`
 	ExifInfo         *struct {
@@ -131,33 +134,43 @@ func (s *Server) handlePhotosList(w http.ResponseWriter, r *http.Request) {
 		filter["visibility"] = map[string]any{"eq": "timeline"}
 		body["orderBy"] = map[string]string{"field": "fileCreatedAt", "direction": "desc"}
 	}
-	raw, _ := json.Marshal(body)
-	res, e := s.upstream(r.Context(), c, http.MethodPost, path, bytes.NewReader(raw), http.Header{"Content-Type": {"application/json"}, "Accept": {"application/json"}})
+	assets, _, e := s.searchAssets(r.Context(), c, path, body)
 	if e != nil {
-		writeErr(w, 502, "Immich request failed; check the server connection")
+		writeErr(w, 502, e.Error())
 		return
 	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		writeErr(w, 502, "Immich could not search your photos ("+res.Status+")")
-		return
-	}
-	var out struct {
-		Assets struct {
-			Items []immichAsset `json:"items"`
-		} `json:"assets"`
-	}
-	if err := json.NewDecoder(io.LimitReader(res.Body, 16<<20)).Decode(&out); err != nil {
-		writeErr(w, 502, "Immich sent an answer that could not be read")
-		return
-	}
-	items := make([]photoOut, 0, len(out.Assets.Items))
-	for _, a := range out.Assets.Items {
+	items := make([]photoOut, 0, len(assets))
+	for _, a := range assets {
 		if len(items) < size {
 			items = append(items, s.photoOut(a, false))
 		}
 	}
 	writeJSON(w, 200, map[string]any{"items": items})
+}
+
+// searchAssets asks the person's Immich for photos (path is /search/metadata
+// or /search/smart, body as Immich takes it) and returns the page and the
+// cursor of the next one ("" at the end). An error is in words for the person.
+func (s *Server) searchAssets(ctx context.Context, c *connection, path string, body map[string]any) ([]immichAsset, string, error) {
+	raw, _ := json.Marshal(body)
+	res, e := s.upstream(ctx, c, http.MethodPost, path, bytes.NewReader(raw), http.Header{"Content-Type": {"application/json"}, "Accept": {"application/json"}})
+	if e != nil {
+		return nil, "", errors.New("Immich request failed; check the server connection")
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return nil, "", errors.New("Immich could not search your photos (" + res.Status + ")")
+	}
+	var out struct {
+		Assets struct {
+			Items      []immichAsset `json:"items"`
+			NextCursor string        `json:"nextCursor"`
+		} `json:"assets"`
+	}
+	if err := json.NewDecoder(io.LimitReader(res.Body, 16<<20)).Decode(&out); err != nil {
+		return nil, "", errors.New("Immich sent an answer that could not be read")
+	}
+	return out.Assets.Items, out.Assets.NextCursor, nil
 }
 
 // GET /photos/{id}: one photo's details (when and where it was taken, the
@@ -173,26 +186,39 @@ func (s *Server) handlePhotoGet(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 409, map[string]string{"error": e.Error(), "code": "connection_unavailable"})
 		return
 	}
-	res, e := s.upstream(r.Context(), c, http.MethodGet, "/assets/"+id, nil, http.Header{"Accept": {"application/json"}})
-	if e != nil {
-		writeErr(w, 502, "Immich request failed; check the server connection")
+	a, e := s.asset(r.Context(), c, id)
+	if errors.Is(e, errPhotoNotFound) {
+		writeErr(w, 404, e.Error())
 		return
+	}
+	if e != nil {
+		writeErr(w, 502, e.Error())
+		return
+	}
+	writeJSON(w, 200, map[string]any{"photo": s.photoOut(*a, true)})
+}
+
+var errPhotoNotFound = errors.New("photo not found")
+
+// asset reads one photo's details from the person's Immich. An error is in
+// words for the person; errPhotoNotFound when it is not in their library.
+func (s *Server) asset(ctx context.Context, c *connection, id string) (*immichAsset, error) {
+	res, e := s.upstream(ctx, c, http.MethodGet, "/assets/"+id, nil, http.Header{"Accept": {"application/json"}})
+	if e != nil {
+		return nil, errors.New("Immich request failed; check the server connection")
 	}
 	defer res.Body.Close()
 	if res.StatusCode == 404 || res.StatusCode == 400 {
-		writeErr(w, 404, "photo not found")
-		return
+		return nil, errPhotoNotFound
 	}
 	if res.StatusCode != 200 {
-		writeErr(w, 502, "Immich could not open the photo ("+res.Status+")")
-		return
+		return nil, errors.New("Immich could not open the photo (" + res.Status + ")")
 	}
 	var a immichAsset
 	if err := json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&a); err != nil {
-		writeErr(w, 502, "Immich sent an answer that could not be read")
-		return
+		return nil, errors.New("Immich sent an answer that could not be read")
 	}
-	writeJSON(w, 200, map[string]any{"photo": s.photoOut(a, true)})
+	return &a, nil
 }
 
 // GET /photos/{id}/picture: the photo itself at screen size (Immich's preview

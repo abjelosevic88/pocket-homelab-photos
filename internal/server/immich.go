@@ -17,6 +17,13 @@ import (
 
 type connection struct{ Base, Public, Secret, Kind, Via string }
 
+// A person without a way into a library yet (nothing is broken): the routes
+// say so in these words, and the /pocket routes answer with nothing.
+var (
+	errNotConnected = errors.New("connect your Immich account to open your library")
+	errNoImmichKey  = errors.New("add your Immich API key in Pocket Core")
+)
+
 func apiBase(raw string) (string, error) {
 	u, e := url.Parse(raw)
 	if e != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
@@ -64,7 +71,7 @@ func (s *Server) connection(ctx context.Context, u *store.User) (*connection, er
 			return nil, e
 		}
 		if cred.Key == "" {
-			return nil, errors.New("add your Immich API key in Pocket Core")
+			return nil, errNoImmichKey
 		}
 		public := cred.PublicURL
 		if public == "" {
@@ -75,7 +82,7 @@ func (s *Server) connection(ctx context.Context, u *store.User) (*connection, er
 		}
 		return &connection{base, public, cred.Key, "api", "core"}, nil
 	}
-	return nil, errors.New("connect your Immich account to open your library")
+	return nil, errNotConnected
 }
 func (s *Server) upstream(ctx context.Context, c *connection, method, path string, body io.Reader, headers http.Header) (*http.Response, error) {
 	req, e := http.NewRequestWithContext(ctx, method, c.Base+path, body)

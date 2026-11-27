@@ -47,6 +47,7 @@ type Server struct {
 	adoptTried      map[int64]time.Time
 
 	bundled bundledState // the Immich that comes with Pocket Photos
+	widgets widgetCache  // "On this day" per person, kept a few minutes (capabilities.go)
 }
 
 func New(cfg *config.Config, st *store.Store, log *slog.Logger, web fs.FS) *Server {
@@ -99,12 +100,18 @@ func (s *Server) Bootstrap(ctx context.Context) error {
 	}()
 	return nil
 }
+
+// manifest is what Photos tells Pocket Core about itself.
+func (s *Server) manifest() core.Manifest {
+	m := core.Manifest{Slug: "photos", Name: "Pocket Photos", Description: "Your photo library across Immich, Pocket Files and Pocket Documents", Icon: "/favicon.svg", Category: "Media", Version: Version, URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "PHOTOS", Offers: linkOffers, Capabilities: capabilities, Services: []core.ServiceUse{{Type: "immich", Reason: "Your photo library, albums, search and memories"}, {Type: "nextcloud", Reason: "Index the photos in your Nextcloud, see them on the map and import the ones you pick"}}, Uses: []core.Use{{App: "files", Scopes: []string{"files:read"}, Reason: "Browse photos in your files and copy selected originals into your photo library"}, {App: "documents", Scopes: []string{"documents:read"}, Reason: "Find image documents and copy selected originals into your photo library"}}}
+	if s.cfg.BaseURL != "" {
+		m.OIDC = &core.OIDCRequest{RedirectURIs: []string{s.cfg.BaseURL + "/api/v1/auth/oidc/callback"}}
+	}
+	return m
+}
 func (s *Server) coreLoop(ctx context.Context) {
 	for {
-		m := core.Manifest{Slug: "photos", Name: "Pocket Photos", Description: "Your photo library across Immich, Pocket Files and Pocket Documents", Icon: "/favicon.svg", Version: Version, URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "PHOTOS", Offers: linkOffers, Services: []core.ServiceUse{{Type: "immich", Reason: "Your photo library, albums, search and memories"}, {Type: "nextcloud", Reason: "Index the photos in your Nextcloud, see them on the map and import the ones you pick"}}, Uses: []core.Use{{App: "files", Scopes: []string{"files:read"}, Reason: "Browse photos in your files and copy selected originals into your photo library"}, {App: "documents", Scopes: []string{"documents:read"}, Reason: "Find image documents and copy selected originals into your photo library"}}}
-		if s.cfg.BaseURL != "" {
-			m.OIDC = &core.OIDCRequest{RedirectURIs: []string{s.cfg.BaseURL + "/api/v1/auth/oidc/callback"}}
-		}
+		m := s.manifest()
 		wait := 30 * time.Minute
 		if _, err := s.core.Register(ctx, s.cfg.CoreRegistrationKey, m); err != nil {
 			s.log.Warn("Core registration", "error", err)
@@ -178,6 +185,9 @@ func (s *Server) Router() http.Handler {
 			r.Get("/photos", s.handlePhotosList)
 			r.Get("/photos/{id}", s.handlePhotoGet)
 			r.Get("/photos/{id}/picture", s.handlePhotoPicture)
+			r.Get("/pocket/search", core.SearchHandler(s.pocketSearch))
+			r.Get("/pocket/day/{date}", core.DayHandler(s.pocketDay))
+			r.Get("/pocket/widget", core.WidgetHandler(s.pocketWidget))
 			r.Get("/users", s.handleListUsers)
 			r.Post("/users", s.handleCreateUser)
 			r.Put("/users/{id}", s.handleUpdateUser)

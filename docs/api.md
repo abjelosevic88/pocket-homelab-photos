@@ -14,6 +14,9 @@ The Go server embeds the Vite build and serves authenticated routes under `/api/
 | `PUT /api/v1/connection` | `{api_key}` or `{email,password}`; validated before replacing saved connection |
 | `DELETE /api/v1/connection` | Remove the direct credential, falling back to Core when available |
 | `/api/v1/immich/*` | Explicitly allowlisted Immich API methods; credentials injected on the server |
+| `GET /api/v1/pocket/search?q=&limit=` | Pocket Search: photos and videos that match a description (Immich smart search), best first |
+| `GET /api/v1/pocket/day/{YYYY-MM-DD}?tz=` | Pocket Day: how many photos and videos were taken that day, and up to 12 of them with thumbnails |
+| `GET /api/v1/pocket/widget` | Pocket Hub: *On this day*, one row per earlier year with photos from today's date |
 | `GET /api/v1/sources/files/spaces` | Authorized Pocket Files spaces |
 | `GET /api/v1/sources/files/fs/list?space=&path=` | Authorized folders and files |
 | `GET /api/v1/sources/files/fs/search?space=&path=&q=` | File search |
@@ -30,5 +33,7 @@ The Go server embeds the Vite build and serves authenticated routes under `/api/
 All source calls obtain a short-lived Core delegation for the signed-in user's email and the target's read scope. Target apps enforce folder, share and document access. The Photos API exposes no source write operation. Imports stream multipart uploads; original bytes and filenames are preserved, and known source timestamps are supplied as fallbacks. Immich extracts EXIF and performs checksum duplicate detection. A retry therefore reports an existing asset for unchanged bytes.
 
 The Immich proxy forwards only supported photo operations. Administrative configuration, API key management and arbitrary URLs are unavailable. It strips incoming shared-link authentication query parameters, browser credentials and cookies; injects the current user's Immich credential; refuses redirects; and preserves byte ranges for video playback. JSON bodies are limited to 2 MiB, uploads to 20 GiB. Media responses carry a sandbox content policy and private/no-store caching.
+
+The three `/api/v1/pocket/*` routes are Pocket Core's capability contract (`docs/capabilities.md` in pocket-homelab-core). A signed-in person may call them, and so may a Core link token with `pocket:search`, `pocket:day` or `pocket:widget`, which opens that one route and nothing else (not the thumbnails either: the browser of the signed-in person loads those). Each call reaches Immich with the current user's own credential, like every other route; a person with no library gets an empty answer, an Immich that fails a 500. The day runs from midnight to midnight in `tz` (the server's `TZ` when absent), counts up to 2,000 items and leaves out archived, hidden and deleted ones. *On this day* is Immich's `on_this_day` memories for today in the server's `TZ`; Immich's answer is kept in memory for ten minutes per person, while the person's connection is checked on every call.
 
 API compatibility was checked against the [Immich 3.3.5 OpenAPI schema](https://github.com/immich-app/immich/blob/v3.3.5/open-api/immich-openapi-specs.json). Stable metadata searches use structured filters and cursors; smart search uses page tokens. Photo edits depend on Immich's beta non-destructive edit API. Machine learning features depend on the Immich server's configuration and completed jobs.

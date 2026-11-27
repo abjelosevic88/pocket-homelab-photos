@@ -23,6 +23,16 @@ var linkOffers = []core.Offer{
 	{Scope: "photos:write", Name: "Add photos", Description: "Add new photos to your library and stack them on the photo they came from (Pocket Photo Lab saves edited copies there). It cannot change or delete the photos you have."},
 }
 
+// capabilities are what Pocket Search, Pocket Day and Pocket Hub may ask
+// here for a person (docs/capabilities.md in pocket-homelab-core): one value
+// for the manifest, the /pocket routes and linkAllows. Nothing can be added
+// by a quick line: a photo is not something one types.
+var capabilities = core.Capabilities{
+	Search: &core.Searchable{What: "Your photos and videos, by what is in them (\"dog on the beach\")", Kinds: []string{"photo", "video"}, Bangs: []string{"photos", "photo"}},
+	Day:    &core.DayFeed{Label: "Photos", One: "photo", Many: "photos", Unit: "count", What: "The photos and videos you took that day"},
+	Widget: &core.Widget{Title: "On this day", What: "Your photos from this date in earlier years"},
+}
+
 type linkRoute struct {
 	methods string
 	path    *regexp.Regexp
@@ -42,6 +52,9 @@ var errLinkScope = errors.New("outside the link's scope")
 
 // linkAllows reports whether a link token with these scopes may make this request.
 func linkAllows(scopes []string, r *http.Request) bool {
+	if capabilities.LinkAllows(scopes, r) {
+		return true
+	}
 	for _, lr := range linkRoutes {
 		if !strings.Contains(" "+lr.methods+" ", " "+r.Method+" ") || !lr.path.MatchString(r.URL.Path) {
 			continue
